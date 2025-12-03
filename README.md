@@ -3,7 +3,8 @@ Code and processed data to reproduce the analyses and figures of the study "Cons
 
 ## structure
 
-data/ processed datasets \n
+data/ processed datasets
+
 src/ python scripts for preprocessing, analyses and figure generation
 
 ## data availability
