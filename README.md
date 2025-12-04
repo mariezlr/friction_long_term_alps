@@ -7,10 +7,12 @@ WARNING: Data and code are still being organized; final version will be released
 ## Raw data availability
 
 The raw observational datasets are publicly accessible from their respective repositories:
-The Elmer/Ice finite-element software used in this study is open source and available at https://github.com/ElmerCSC/elmerfem ([Gagliardini et al., 2013](https://doi.org/10.5194/gmd-6-1299-2013)), . 
-Surface DEMs, velocity and elevation datasets for the Alpine glaciers analyzed in this study are available from the following sources: 
+
+The Elmer/Ice finite-element software used in this study is open source and available at https://github.com/ElmerCSC/elmerfem ([Gagliardini et al., 2013](https://doi.org/10.5194/gmd-6-1299-2013)). 
+
+Bedrock and surface DEMs, velocity and elevation datasets for the Alpine glaciers analyzed in this study are available from the following sources: 
 - GLAMOS database (https://www.glamos.ch); 
-- Swiss glaciers monitoring programs ([Bauder, 2016](https://doi.glamos.ch/pubs/glrep/glrep_133-134.html); [Bauder et al., 2022](https://doi.glamos.ch/pubs/glrep/glrep_141-142.html)); 
+- Swiss glaciers monitoring programs ([Bauder, 2016](https://doi.glamos.ch/pubs/glrep/glrep_133-134.html); [Bauder et al., 2022](https://doi.glamos.ch/pubs/glrep/glrep_141-142.html) for the thickness change and surface velocity timeseries; [Bauder et al., 2007](https://doi.org/10.3189/172756407782871701) for the surface DEMs; [Grab et al., 2021](http://dx.doi.org/10.1017/jog.2021.55) for the bedrock DEMs); 
 - GLACIOCLIM database (https://glacioclim.osug.fr);
 - French glaciers monitoring programs (Saint-Sorlin: [Vincent et al., 2000](https://doi.org/10.3189/172756500781833052); Argentière: [Vincent et al., 2009](https://doi.org/10.3189/172756409787769500))
 
