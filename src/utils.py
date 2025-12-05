@@ -45,7 +45,7 @@ def get_friclaw_params(glacier_name, stake_name):
 GLACIERS = {
     'All': {
         'full_name': "Allalin",
-        'contour_file': geom_data_dir / 'outlines' / 'All_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'All_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'All_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'All_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("All"),
@@ -61,7 +61,7 @@ GLACIERS = {
     },
     'Arg': {
         'full_name': "Argentière",
-        'contour_file': geom_data_dir / 'outlines' / 'Arg_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'Arg_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'Arg_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'Arg_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("Arg"),
@@ -87,7 +87,7 @@ GLACIERS = {
     },
     'Cor': {
         'full_name': "Corbassière",
-        'contour_file': geom_data_dir / 'outlines' / 'Cor_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'Cor_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'Cor_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'Cor_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("Cor"),
@@ -109,7 +109,7 @@ GLACIERS = {
     },
     'Geb': {
         'full_name': "Gébroulaz",
-        'contour_file': geom_data_dir / 'outlines' / 'Geb_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'Geb_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'Geb_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'Geb_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("Geb"),
@@ -131,7 +131,7 @@ GLACIERS = {
     },
     'Gie': {
         'full_name': "Giétro",
-        'contour_file': geom_data_dir / 'outlines' / 'Gie_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'Gie_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'Gie_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'Gie_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("Gie"),
@@ -153,7 +153,7 @@ GLACIERS = {
     },
     'GB': {
         'full_name': "Glacier Blanc",
-        'contour_file': geom_data_dir / 'outlines' / 'GB_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'GB_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'GB_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'GB_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("GB"),
@@ -175,7 +175,7 @@ GLACIERS = {
     },
     'MDG': {
         'full_name': "Mer de Glace",
-        'contour_file': geom_data_dir / 'outlines' / 'MDG_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'MDG_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'MDG_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'MDG_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("MDG"),
@@ -203,7 +203,7 @@ GLACIERS = {
     },
     'StSo': {
         'full_name': "Saint-Sorlin",
-        'contour_file': geom_data_dir / 'outlines' / 'StSo_Contour.dat',
+        'outlines_file': geom_data_dir / 'outlines' / 'StSo_outlines.dat',
         'flowline': geom_data_dir / 'flowlines' / 'StSo_flowline.csv',
         'longit_cs': geom_data_dir / 'flowlines' / 'StSo_long_cross_section.csv',
         'years_DEM': get_years_for_glacier("StSo"),

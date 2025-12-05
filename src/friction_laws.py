@@ -210,14 +210,6 @@ def fit_tsai_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
 
 ### ----- Normalised friction law -----
 
-def aaacalcul_normalised_friction_law(df, name_col_vel, name_col_tau, CN, As, m=3, velmin=2):
-    df = df.loc[df[name_col_vel] > velmin]
-    df = df.copy()
-    df.loc[:, 'normalised_u_bed'] = df[name_col_vel] / (As*(CN**m))
-    df.loc[:, 'normalised_tau_b'] = (df[name_col_tau] / CN)**m
-    return df
-
-
 def calcul_normalised_friction_law(vel, tau, CN, As, m=3, velmin=2):
     vel_norm = vel / (As*(CN**m))
     tau_norm = (tau / CN)**m

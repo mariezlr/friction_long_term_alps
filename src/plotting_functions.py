@@ -125,7 +125,7 @@ def plot_thk_changes_timeseries():
 
 def plot_glaciers_longit_cs():
     """
-    Plot flowlines, contours, and longitudinal profiles for all glaciers defined in config.GLACIERS.
+    Plot flowlines, outlines, and longitudinal profiles for all glaciers defined in config.GLACIERS.
     """
     global GLACIERS 
     order = ['All', 'Gie', 'Arg', 'GB', 'Cor', 'MDG', 'Geb', 'StSo']
@@ -133,14 +133,14 @@ def plot_glaciers_longit_cs():
 
 
     n_glaciers = len(GLACIERS)
-    n_rows = (n_glaciers * 2 + 3) // 4  # deux axes par glacier, 4 colonnes
+    n_rows = (n_glaciers * 2 + 3) // 4  # 2 axes per glacier / 4 columns
     fig, axes = plt.subplots(n_rows, 4, figsize=(24, 15))
     axes = axes.ravel()
 
     for i, (glacier_name, glacier_data) in enumerate(GLACIERS.items()):
         # Read files
         glacier_full_name = glacier_data['full_name']
-        df_contour = pd.read_csv(glacier_data['contour_file'], sep="\s+", header=None)
+        df_outlines = pd.read_csv(glacier_data['outlines_file'], sep="\s+", header=None)
         df_flowline = pd.read_csv(glacier_data['flowline'], sep=',', header=0)
         df_longit_cs = pd.read_csv(glacier_data['longit_cs'])
         years = glacier_data['years_DEM']
@@ -150,30 +150,30 @@ def plot_glaciers_longit_cs():
         avg_dist = glacier_data['avg_dist']
 
         # Axes
-        ax_contour = axes[2*i]
+        ax_outlines = axes[2*i]
         ax_longit = axes[2*i + 1]
 
         # Points and flowline
-        ax_contour.plot(df_contour.iloc[:,0], df_contour.iloc[:,1], 'k-')
+        ax_outlines.plot(df_outlines.iloc[:,0], df_outlines.iloc[:,1], 'k-')
         if points:
-            ax_contour.scatter(*zip(*points.values()), c=list(colors.values()), s=80, edgecolors='black', zorder=3)
+            ax_outlines.scatter(*zip(*points.values()), c=list(colors.values()), s=80, edgecolors='black', zorder=3)
             for label, (x, y) in points.items():
-                ax_contour.annotate(label, (x, y), xytext=(10,10), textcoords="offset points",
+                ax_outlines.annotate(label, (x, y), xytext=(10,10), textcoords="offset points",
                                     ha='right', fontsize=12, color=colors[label])
-        ax_contour.plot(df_flowline.iloc[:,0], df_flowline.iloc[:,1], color='r', label='Smooth flowline')
-        ax_contour.set_title(glacier_name)
-        ax_contour.set_aspect('equal')
-        ax_contour.add_artist(ScaleBar(1, location='lower right'))
-        for spine in ax_contour.spines.values():
+        ax_outlines.plot(df_flowline.iloc[:,0], df_flowline.iloc[:,1], color='r', label='Smooth flowline')
+        ax_outlines.set_title(glacier_name)
+        ax_outlines.set_aspect('equal')
+        ax_outlines.add_artist(ScaleBar(1, location='lower right'))
+        for spine in ax_outlines.spines.values():
             spine.set_visible(False)
-        ax_contour.set_xticks([])
-        ax_contour.set_yticks([])
-        ax_contour.set_xlabel('')
-        ax_contour.set_ylabel('')
-        ax_contour.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)   
-        ax_contour.annotate('N', xy=(0.9, 0.95), xytext=(0.9, 0.85), arrowprops=dict(facecolor='black', arrowstyle='-|>'), 
+        ax_outlines.set_xticks([])
+        ax_outlines.set_yticks([])
+        ax_outlines.set_xlabel('')
+        ax_outlines.set_ylabel('')
+        ax_outlines.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)   
+        ax_outlines.annotate('N', xy=(0.9, 0.95), xytext=(0.9, 0.85), arrowprops=dict(facecolor='black', arrowstyle='-|>'), 
             ha='center', va='center', fontsize=16, xycoords='axes fraction')
-        ax_contour.set_title(glacier_full_name, fontsize=22)
+        ax_outlines.set_title(glacier_full_name, fontsize=22)
 
         # Longitudinal cross-section
         ax_longit.plot(df_longit_cs['dist'], df_longit_cs['z_bed'], color='k', label='Bedrock')

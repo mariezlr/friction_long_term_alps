@@ -24,12 +24,12 @@ def nan_uniform_filter(data, size):
 
 
 
-def slope_analysis(x_profil, y_profil, years_DEM, name_glacier, ray, df_contour):
+def slope_analysis(x_profil, y_profil, years_DEM, name_glacier, ray, df_outlines):
     """
     Compute slopes and locally averaged slopes along a given profile for a glacier across multiple DEM years.
     """
 
-    polygon = Polygon(df_contour.iloc[:, :2].to_numpy())
+    polygon = Polygon(df_outlines.iloc[:, :2].to_numpy())
 
     df0 = pd.read_csv(script_dir / f'../../data/{name_glacier}/Elmer_Init/Data/DEM_surface_{years_DEM[0]}_{name_glacier.upper()}.dat',
                       sep=r'\s+', names=['x','y','z'])
@@ -92,7 +92,7 @@ def run_slope_mean_for_all(date_min, date_max):
     glaciers_items = list(GLACIERS.items())
     for glacier_key, glacier_data in glaciers_items:
         full_name = glacier_data.get("full_name", glacier_key)
-        contour = pd.read_csv(glacier_data["contour_file"], sep=r"\s+", header=None)
+        outlines = pd.read_csv(glacier_data["outlines_file"], sep=r"\s+", header=None)
         years = glacier_data["years_DEM"]
         
         for stake, xy in glacier_data["xy_coords"].items():
@@ -105,7 +105,7 @@ def run_slope_mean_for_all(date_min, date_max):
                 years_DEM=years,
                 name_glacier=glacier_key,
                 ray=glacier_data["avg_dist"][stake],
-                df_contour=contour
+                df_outlines=outlines
             )
 
             # mean slope
