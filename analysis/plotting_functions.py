@@ -13,12 +13,12 @@ script_dir = Path(__file__).resolve().parent
 
 
 plt.rcParams["lines.linewidth"] = 0.9
-plt.rcParams.update({"font.size": 12,       # Taille de la police par défaut
-                     "axes.labelsize": 14,  # Taille de la police des étiquettes d'axe
-                     "axes.titlesize": 14,  # Taille de la police des titres
-                     "legend.fontsize": 12, # Taille de la police de la légende
-                     "xtick.labelsize": 12, # Taille de la police des graduations de l'axe des x
-                     "ytick.labelsize": 12  # Taille de la police des graduations de l'axe des y
+plt.rcParams.update({"font.size": 12,       
+                     "axes.labelsize": 14,  
+                     "axes.titlesize": 14,  
+                     "legend.fontsize": 12, 
+                     "xtick.labelsize": 12, 
+                     "ytick.labelsize": 12 
                     })
 
 
@@ -198,7 +198,7 @@ def plot_glaciers_longit_cs():
         ax_longit.set_title(glacier_full_name, fontsize=22)
 
     plt.tight_layout()
-    fig.savefig(fig_dir / "longitudinal_cuts.pdf")
+    fig.savefig(fig_dir / "longitudinal_cuts.pdf", dpi=200)
     plt.close(fig)
 
 
@@ -291,7 +291,7 @@ def plot_friction_laws():
     ax1.legend().remove()
     fig.subplots_adjust(bottom=0.28)
     
-    fig.savefig(fig_dir / "friction_laws_main.pdf")
+    fig.savefig(fig_dir / "friction_laws_main.pdf", dpi=200)
     plt.close(fig)
 
 
