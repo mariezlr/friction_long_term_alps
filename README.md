@@ -21,23 +21,23 @@ Bedrock and surface DEMs, velocity and elevation datasets for the Alpine glacier
 
 ## Workflow overview
 
-1. Data acquisition
+### 1. Data acquisition
 
-### Geometric data
+#### Geometric data
 Surface and bedrock DEMs are available on Zenodo : {insert link}.
 
 All DEMs are regridded to a common grid format to serve as input for Elmer/Ice simulations.
 
 Lighter geometric files (glacier outlines, stake positions, etc.) are stored directly in this repository under data/raw/.
 
-### Timeseries
+#### Timeseries
 Timeseries for each stake of
 - raw data : surface velocity, thickness change
 - processed data : deformation velocity, basal shear stress, sliding velocity
 are stored in separate CSV files, one per stake under data/{glacier}_{stake}_all_data.csv.
 
 
-2. Data processing and analysis
+### 2. Data processing and analysis
 
 Analysis code is located in analysis/, structured as follows:
 
@@ -50,7 +50,7 @@ utils.py -->    GLACIERS dictionary containing geometric data, time series and f
 plotting_functions.py -->    Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
 
 
-3. Plot figures
+### 3. Plot figures
 
 All important paper figures can be generated using functions in plotting_functions.py
 
