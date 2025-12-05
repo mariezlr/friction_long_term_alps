@@ -1,12 +1,27 @@
-from utils import GLACIERS
+from utils import GLACIERS, fig_dir, get_friclaw_params
+from friction_laws import *
+from run_friction_fits import *
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib_scalebar.scalebar import ScaleBar
 from pathlib import Path
 from collections import OrderedDict
+from matplotlib.ticker import LogFormatter
 
 script_dir = Path(__file__).resolve().parent
+
+
+plt.rcParams["lines.linewidth"] = 0.9
+plt.rcParams.update({"font.size": 12,       # Taille de la police par défaut
+                     "axes.labelsize": 14,  # Taille de la police des étiquettes d'axe
+                     "axes.titlesize": 14,  # Taille de la police des titres
+                     "legend.fontsize": 12, # Taille de la police de la légende
+                     "xtick.labelsize": 12, # Taille de la police des graduations de l'axe des x
+                     "ytick.labelsize": 12  # Taille de la police des graduations de l'axe des y
+                    })
+
+
 
 def plot_surface_vel_timeseries():
     """
@@ -54,7 +69,7 @@ def plot_surface_vel_timeseries():
 
     plt.subplots_adjust(wspace=0.25)
     plt.tight_layout()
-    fig.savefig(script_dir / "../../figures/timeseries_surface_vel.pdf")
+    fig.savefig(fig_dir / "timeseries_surface_vel.pdf")
     plt.close(fig)
 
 
@@ -104,7 +119,7 @@ def plot_thk_changes_timeseries():
 
     plt.subplots_adjust(wspace=0.25)
     plt.tight_layout()
-    fig.savefig(script_dir / "../../figures/timeseries_thk_changes.pdf")
+    fig.savefig(fig_dir / "timeseries_thk_changes.pdf")
     plt.close(fig)
 
 
@@ -166,7 +181,7 @@ def plot_glaciers_longit_cs():
             ax_longit.plot(df_longit_cs['dist'], df_longit_cs[f'z_surf_{year}'], label=str(year))
 
         for label, (x, y) in points.items():
-            idx = glacier_data['flowline_idx'][label]
+            idx = flowline_idx[label]
             x_dist = df_longit_cs['dist'].iloc[idx]
             y_alt = df_longit_cs[f'z_surf_{years[0]}'].iloc[idx]
             ax_longit.fill_betweenx(ax_longit.get_ylim(),
@@ -183,128 +198,192 @@ def plot_glaciers_longit_cs():
         ax_longit.set_title(glacier_full_name, fontsize=22)
 
     plt.tight_layout()
-    fig.savefig(script_dir / "../../figures/longitudinal_cuts.pdf")
+    fig.savefig(fig_dir / "longitudinal_cuts.pdf")
     plt.close(fig)
-    
+
+
 
 def plot_friction_laws():
-    return True
+    """
+    Plots friction observed friction laws with best fits for all glaciers, and normalised frcition laws.
+
+    """
+
+    x_ticks = [1, 2, 4, 6, 10, 20, 30, 50, 80, 100, 200, 300, 400, 500]
+    y_ticks = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.16, 0.2, 0.3]
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14,8))
+    
+    for glacier_key, glacier_data in GLACIERS.items():
+        
+        for i, stake in enumerate(glacier_data['xy_coords'].keys()):
+
+            if stake == "Wheel": # only for comparison, not a studied point
+                continue
+
+            color = glacier_data['colors'][stake]
+            marker = glacier_data['markers'][stake]
+
+            # raw data          
+            vel, tau = compile_vel_tau_timeseries(glacier_key, stake)
+            ax1.scatter(vel, tau, color=color, edgecolor='k', marker=marker, label=f"{glacier_data['full_name']} {stake}", zorder=10)
+
+            if glacier_key == "StSo": # too few data points to have a reliable fit
+                continue
+
+            # fit data
+            fit_file = glacier_data['friclaw_ts'][stake]
+            df_fit = pd.read_csv(fit_file)
+            
+            vel_fit = df_fit['vel_fit'].values
+            tau_fit = df_fit['tau_fit'].values
+            
+            ax1.plot(vel_fit, tau_fit, color=color, linewidth = 2)
+
+            # CN value
+            CN_value, q_value, As_value, m_value = get_friclaw_params(glacier_key, stake)
+            if stake!="ss":
+                ax1.axhline(y=CN_value, color=color, linestyle='--')
+                
+            # Normalized version (ax2)
+            if glacier_key == "Geb": # keeping only hard bed glaciers
+                continue
+                 
+            vel_norm, tau_norm = calcul_normalised_friction_law(vel, tau, CN_value, As_value, m_value)
+            
+            ax2.scatter(vel_norm, tau_norm, color=color, edgecolor='k', marker=marker, label=f"{glacier_data['full_name']} {stake}")
+    
+    # Theoritical law
+    V_values = np.arange(0.05,50,0.1)
+    ax2.plot(V_values, [scaled_friction_law(u, 1) for u in V_values], color='k', label='cavitation law')
+    ax2.plot(np.arange(0.05,1.5,0.1), np.arange(0.05,1.5,0.1), 'b--', label='Weertman-type law')
+    
+    # Labels
+    ax1.set_xlabel(r'Basal sliding velocity $(m \cdot yr^{-1})$')
+    ax1.set_ylabel(r'Basal shear stress (MPa)')
+    ax1.set_xscale('log')
+    ax1.set_yscale('log')
+    ax1.set_xticks([x for x in x_ticks if ax1.get_xlim()[0] <= x <= ax1.get_xlim()[-1]])
+    ax1.set_yticks([y for y in y_ticks if ax1.get_ylim()[0] <= y <= ax1.get_ylim()[-1]])
+
+    ax2.set_xlabel(r'Scaled sliding velocity $\frac{u_b}{A_s(CN)^m}$')
+    ax2.set_ylabel(r'Scaled shear stress $\left(\frac{\tau_b}{CN}\right)^m$')
+    ax2.set_xscale('log')
+    ax2.set_yscale('log')
+
+    for ax in [ax1, ax2]:
+        ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
+        ax.get_xaxis().set_minor_formatter(plt.NullFormatter())
+        ax.get_yaxis().set_major_formatter(plt.ScalarFormatter())
+        ax.get_yaxis().set_minor_formatter(plt.NullFormatter())
+        ax.grid(which='both', linestyle='dotted')
+    
+
+    # (a) and (b)
+    ax1.text(-0.05, 1.08, '(a)', transform=ax1.transAxes,
+         fontsize=18, fontweight='bold', va='top', ha='right')
+    ax2.text(-0.05, 1.08, '(b)', transform=ax2.transAxes,
+         fontsize=18, fontweight='bold', va='top', ha='right')
+
+    # Légende commune
+    plt.tight_layout()
+    fig.legend(*ax1.get_legend_handles_labels(), loc='lower center', ncol=4, fontsize=16)
+    ax1.legend().remove()
+    fig.subplots_adjust(bottom=0.28)
+    
+    fig.savefig(fig_dir / "friction_laws_main.pdf")
+    plt.close(fig)
+
+
 
 def plot_taub_vs_slope():
     fig, ax = plt.subplots(figsize=(6,5))
 
-filtered_df = mean_slopes.dropna(subset=['CN', 'slope(rad)']).reset_index(drop=True)
-print(filtered_df)
-filtered_df.to_csv("../data/mean_slopes.csv", index=False)
+    slopes_deg, CN_values = [], []
 
-# Tracé des points
-ax.scatter(filtered_df['slope(deg)'], filtered_df['CN'], c=filtered_df['color'], zorder=2)
+    for glacier_key, glacier_data in GLACIERS.items():
+        
+        if glacier_key in ["Geb", "StSo"]:   # ignoring soft-bedd and bad constrained glaciers
+            continue
 
-# Ajout des barres d'erreur verticales (sur CN)
-sigma_CN = 0.002112704740016016 # Voir notebook Uncertainty
-ax.errorbar(filtered_df['slope(deg)'], filtered_df['CN'], 
-             yerr=sigma_CN, 
-             fmt='none', ecolor='gray', capsize=3, zorder=1)
+        slope_data = glacier_data['slope_60_80']
 
-# Ajouter des étiquettes provenant de la colonne 'name' filtrée
-texts = []
-for i, name in enumerate(filtered_df['name']):
-        # Cas particuliers
-    if name == "MDG Trélaporte":
-        x = np.log10(0.55 * filtered_df['slope(deg)'].iloc[i])
-        y = np.log10(1.03 * filtered_df['CN'].iloc[i])
-    elif name == "MDG Tacul":
-        x = np.log10(0.8 * filtered_df['slope(deg)'].iloc[i])
-        y = np.log10(0.94 * filtered_df['CN'].iloc[i])
-    elif name == "Corbassière A4":
-        x = np.log10(0.95 * filtered_df['slope(deg)'].iloc[i])
-        y = np.log10(0.94 * filtered_df['CN'].iloc[i])
-    elif name == "Glacier Blanc sup" or name == "Glacier Blanc inf":
-        x = np.log10(0.7 * filtered_df['slope(deg)'].iloc[i])
-        y = np.log10(1.03 * filtered_df['CN'].iloc[i])
-    else:
-        x = np.log10(0.95 * filtered_df['slope(deg)'].iloc[i])
-        y = np.log10(1.03 * filtered_df['CN'].iloc[i])
+        for stake, slope_deg in slope_data.items():
+
+            if stake == "Wheel":
+                CN = 0.217
+            else:
+                CN = get_friclaw_params(glacier_key, stake)[0]
+
+            slopes_deg.append(slope_deg[0])
+            CN_values.append(CN)
+
+            color = GLACIERS[glacier_key]['colors'][stake]
+            marker = 'o'
+            label = f"{glacier_key} {stake}"
+
+            ax.scatter(slope_deg, CN, c=color, zorder=2)
+
+            sigma_CN = 0.002112704740016016
+            ax.errorbar(slope_deg, CN, yerr=sigma_CN, 
+                        fmt='none', ecolor='gray', capsize=3, zorder=1)
+            
+            # adding names of the stakes
+            if stake == "A4":
+                ax.text(0.92*slope_deg, 0.94*CN, label, fontsize=9, ha='left')
+            elif stake == "4":
+                ax.text(0.78*slope_deg, CN, label, fontsize=9, ha='left')
+            elif stake == "trel":
+                ax.text(1.07*slope_deg, CN, label, fontsize=9, ha='left')
+            else:
+                ax.text(0.92*slope_deg, 1.03*CN, label, fontsize=9, ha='left')
     
-    texts.append(ax.text(10**x, 10**y, name, fontsize=9, ha='left'))
+    tan_slopes = np.tan(np.radians(slopes_deg))
 
+    def model_fixed_p(x, C):
+        return C * x**0.47
 
-alpha_values = np.arange(2, np.max(mean_slopes['slope(deg)']), 0.001)
+    # Fit uniquement pour C
+    popt, pcov = curve_fit(model_fixed_p, tan_slopes, CN_values, p0=[0.3])
+    C_fit = popt[0]
+    C_err = np.sqrt(np.diag(pcov))[0]
 
-# Convertir les pentes en tangente et extraire uniquement les valeurs valides
-mask = np.isfinite(mean_slopes['CN']) & np.isfinite(mean_slopes['slope(deg)'])
-x = np.tan(np.deg2rad(mean_slopes.loc[mask, 'slope(deg)']))
-y = mean_slopes.loc[mask, 'CN']
-
-# Fonction modèle : CN = C * tan(alpha)^p
-def model(x, C, p):
-    return C * x**p
-
-# Fit des deux paramètres (C et p)
-popt, pcov = curve_fit(model, x, y, p0=[0.3, 0.47])
-C_fit, p_fit = popt
-perr = np.sqrt(np.diag(pcov))  # incertitudes 1σ
-C_err, p_err = perr
-
-print(f"Best fit: C = {C_fit:.3f} ± {C_err:.3f}, p = {p_fit:.3f} ± {p_err:.3f}")
-
-# Tracé du fit
-x_fit = np.tan(np.deg2rad(alpha_values))
-
-
-# Fonction modèle avec p fixé
-def model_fixed_p(x, C):
-    p = 0.47  # exposant fixe
-    return C * x**p
-
-# Fit uniquement pour C
-popt, pcov = curve_fit(model_fixed_p, x, y, p0=[0.3])
-C_fit = popt[0]
-C_err = np.sqrt(np.diag(pcov))[0]
-
-print(f"Best fit avec p=0.47 : C = {C_fit:.3f} ± {C_err:.3f}")
-
-# Tracé du modèle imposé p=0.47 pour comparaison
-x_fit = np.tan(np.deg2rad(alpha_values))
-ax.plot(alpha_values, model_fixed_p(x_fit, C_fit), 
-        linestyle="-", color='red', linewidth=1.5,
-        label=fr"$CN = {C_fit:.2f} \tan(\alpha)^{{0.47}}$")
-
-
-ax.grid(True, linestyle='dotted')
-ax.set_xlabel('Mean slope (°)')
-ax.set_ylabel('CN (MPa)')
-
-ax.set_xscale('log')
-ax.set_yscale('log')
-
-# Formatter log qui affiche les valeurs décimales "normales"
-class LogFormatterDecimal(LogFormatter):
-    def __call__(self, x, pos=None):
-        return f"{x:.2f}"
+    alpha_values = np.arange(2, np.max(slopes_deg), 0.001)
+    x_fit = np.tan(np.radians(alpha_values))
+    ax.plot(alpha_values, model_fixed_p(x_fit, C_fit), 
+            linestyle="-", color='red', linewidth=1.5,
+            label=fr"$CN = {C_fit:.2f} \tan(\alpha)^{{0.47}}$")            
     
-class LogFormatterInteger(LogFormatter):
-    def __call__(self, x, pos=None):
-        return f"{x:.0f}"
+    ax.grid(True, linestyle='dotted')
+    ax.set_xlabel('Mean slope (°)')
+    ax.set_ylabel('CN (MPa)')
 
-ax = plt.gca()
-formatter_dec = LogFormatterDecimal(base=10, labelOnlyBase=False)
-formatter_int = LogFormatterInteger(base=10, labelOnlyBase=False)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    class LogFormatterDecimal(LogFormatter): # to plot decimal values
+        def __call__(self, x, pos=None):
+            return f"{x:.2f}"
+        
+    class LogFormatterInteger(LogFormatter):
+        def __call__(self, x, pos=None):
+            return f"{x:.0f}"
 
-ax.xaxis.set_major_formatter(formatter_int)
-ax.xaxis.set_minor_formatter(formatter_int)
-ax.yaxis.set_major_formatter(formatter_dec)
-ax.yaxis.set_minor_formatter(formatter_dec)
+    ax = plt.gca()
+    formatter_dec = LogFormatterDecimal(base=10, labelOnlyBase=False)
+    formatter_int = LogFormatterInteger(base=10, labelOnlyBase=False)
 
-ax.grid(True, which='both', linestyle='dotted', color='gray', alpha=0.6)
+    ax.xaxis.set_major_formatter(formatter_int)
+    ax.xaxis.set_minor_formatter(formatter_int)
+    ax.yaxis.set_major_formatter(formatter_dec)
+    ax.yaxis.set_minor_formatter(formatter_dec)
 
-plt.legend()
+    ax.grid(True, which='both', linestyle='dotted', color='gray', alpha=0.6)
 
-plt.tight_layout()
-plt.show()
+    plt.legend()
 
-fig.savefig("../output/figures/CN_slopes.pdf")
-
+    plt.tight_layout()
+    fig.savefig(fig_dir / "CN_vs_slope.pdf")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
