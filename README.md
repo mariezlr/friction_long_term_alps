@@ -45,7 +45,7 @@ data/processed_timeseries/friction_fits/
 
 ### 2. Data processing and analysis
 
-Analysis code is located in analysis/, structured as follows:
+Analysis code is located in src/, structured as follows:
 
 friction_laws.py -->    Functions to fit friction laws (Weertman, Lliboutry, Tsai) and compute optimized parameters.
 
@@ -53,11 +53,11 @@ run_friction_fits.py -->    Functions to compute the best velocity and shear str
 
 utils.py -->    GLACIERS dictionary containing geometric data, time series and fitted parameters for each stake. Initially populated with raw data and progressively enriched with outputs from run_friction_fits.py
 
-plotting_functions.py -->    Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
+plots.py -->    Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
 
 
 ### 3. Plot figures
 
-All important paper figures can be generated using functions in plotting_functions.py
+All important paper figures can be generated using functions in plots.py
 
 Output figures are saved in figures/
