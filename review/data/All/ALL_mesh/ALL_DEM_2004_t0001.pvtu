@@ -1,0 +1,42 @@
+<VTKFile type="PUnstructuredGrid" version="0.1" byte_order="LittleEndian">
+  <PUnstructuredGrid>
+    <PPointData Scalars="pressure" Vectors="normal vector">
+      <PDataArray type="Float64" Name="pressure" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="dsdt" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="ds" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="beddem" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="surfdem" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="flow solution loads 1" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="flow solution loads 2" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="flow solution loads 3" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="flow solution loads 4" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="surfgrad1" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="surfgrad2" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="nodearea" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normalstress" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normalstressexported" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normalbed1" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normalbed2" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normalbed3" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="projstress" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="thickness" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="depth" NumberOfComponents="1" format="appended"/>
+      <PDataArray type="Float64" Name="normal vector" NumberOfComponents="3" format="appended"/>
+      <PDataArray type="Float64" Name="velocity" NumberOfComponents="3" format="appended"/>
+    </PPointData>
+    <PCellData>
+      <PDataArray type="Int32" Name="GeometryIds" format="appended"/>
+    </PCellData>
+    <PPoints>
+      <DataArray type="Float64" NumberOfComponents="3" format="appended"/>
+    </PPoints>
+    <Piece Source="ALL_DEM_2004_8np1_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np2_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np3_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np4_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np5_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np6_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np7_t0001.vtu"/>
+    <Piece Source="ALL_DEM_2004_8np8_t0001.vtu"/>
+  </PUnstructuredGrid>
+</VTKFile>

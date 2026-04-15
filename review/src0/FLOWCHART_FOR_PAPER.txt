@@ -1,0 +1,164 @@
+# Flowchart pour Data and Methods (papier)
+
+## Version texte ASCII
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         INPUT DATA                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────────┐              ┌──────────────────┐         │
+│  │  Surface & Bed   │              │   Field Obs.     │         │
+│  │      DEMs        │              │   (at stakes)    │         │
+│  │ zₛ(x,y,t_DEM)   │              │                  │         │
+│  │ z_b(x,y)        │              │  H(t)            │         │
+│  │                  │              │  u_surf(t)       │         │
+│  │ Few dates (5-20) │              │ Many dates (50+) │         │
+│  │ Full spatial     │              │ Sparse spatial   │         │
+│  └────────┬─────────┘              └────────┬─────────┘         │
+│           │                                 │                    │
+└───────────┼─────────────────────────────────┼────────────────────┘
+            │                                 │
+            ▼                                 │
+┌─────────────────────────────────────────────┼────────────────────┐
+│         STEP 1: ELMER/ICE MODELING          │                    │
+│         (at each t_DEM)                     │                    │
+├─────────────────────────────────────────────┼────────────────────┤
+│                                             │                    │
+│  ┌────────────────────────────┐            │                    │
+│  │   Full-Stokes solver       │            │                    │
+│  │   (diagnostic)             │            │                    │
+│  │                            │            │                    │
+│  │  Input:  DEM geometry      │            │                    │
+│  │  Output: τ_b(x,y,t_DEM)   │←───────────┘                    │
+│  │          u_def(x,y,t_DEM) │     Extract at                   │
+│  │          ∇z_s(x,y,t_DEM)  │     stake locations              │
+│  └────────────┬───────────────┘                                  │
+│               │                                                  │
+└───────────────┼──────────────────────────────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 2: TEMPORAL INTERPOLATION                                 │
+│  (at stake locations only)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  At each stake, establish empirical relations:                   │
+│                                                                   │
+│  ┌────────────────────────────────────────┐                     │
+│  │  Fit to Elmer outputs at t_DEM dates:  │                     │
+│  │                                         │                     │
+│  │  τ_b ≈ c₁ × H           (Eq. 7a)      │                     │
+│  │  u_def ≈ c₂ × H^(n+1)   (Eq. 7b)      │                     │
+│  └────────────────┬───────────────────────┘                     │
+│                   │                                               │
+│                   │  Apply to continuous H(t) observations       │
+│                   ▼                                               │
+│  ┌────────────────────────────────────────┐                     │
+│  │  Continuous time series (daily/annual): │                     │
+│  │                                         │                     │
+│  │  τ_b(t) = c₁ × H(t)                   │                     │
+│  │  u_def(t) = c₂ × H(t)^(n+1)           │                     │
+│  └────────────────┬───────────────────────┘                     │
+│                   │                                               │
+└───────────────────┼───────────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 3: BASAL SLIDING VELOCITY                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌────────────────────────────────────────┐                     │
+│  │  Compute at each date t:               │                     │
+│  │                                         │                     │
+│  │  u_bed(t) = u_surf(t) - u_def(t)      │                     │
+│  │             └observed┘   └interpolated┘│                     │
+│  └────────────────┬───────────────────────┘                     │
+│                   │                                               │
+└───────────────────┼───────────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 4: FRICTION LAW INFERENCE                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌────────────────────────────────────────┐                     │
+│  │  Fit friction laws to:                 │                     │
+│  │                                         │                     │
+│  │  τ_b(t) vs u_bed(t)                   │                     │
+│  │                                         │                     │
+│  │  • Weertman: τ_b = (u_bed/As)^(1/m)   │                     │
+│  │  • Lliboutry: τ_b = f(u_bed,CN,q)     │                     │
+│  └────────────────┬───────────────────────┘                     │
+│                   │                                               │
+│                   ▼                                               │
+│  ┌────────────────────────────────────────┐                     │
+│  │  OUTPUT: Friction parameters           │                     │
+│  │          (m, As, q, etc.)              │                     │
+│  │  representing multi-decadal average    │                     │
+│  └────────────────────────────────────────┘                     │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Version simplifiée pour le papier
+
+```
+DEM (sparse time)  ───→  Elmer/Ice  ───→  τ_b(x,y,t_DEM)
+                                           u_def(x,y,t_DEM)
+                                                 │
+                                                 │ Extract at stakes
+                                                 ▼
+                                         Empirical relations:
+                                         τ_b ∝ H
+                                         u_def ∝ H^(n+1)
+                                                 │
+                                                 │ Apply to H(t)
+                                                 ▼
+H(t), u_surf(t)  ───────────────→  u_bed(t) = u_surf(t) - u_def(t)
+(dense time)                       τ_b(t) from H(t)
+                                                 │
+                                                 │ Fit
+                                                 ▼
+                                    Friction law: τ_b = f(u_bed)
+```
+
+## Légende des symboles
+
+### Données spatiales complètes (Elmer)
+- **zₛ(x,y,t_DEM)** : Surface topography at DEM dates
+- **z_b(x,y)** : Bedrock topography
+- **τ_b(x,y,t_DEM)** : Basal shear stress from Elmer
+- **u_def(x,y,t_DEM)** : Deformation velocity from Elmer
+
+### Observations aux stakes (séries temporelles)
+- **H(t)** : Ice thickness (continuous, observed)
+- **u_surf(t)** : Surface velocity (continuous, observed)
+
+### Variables interpolées
+- **τ_b(t)** : Basal stress at all observation dates
+- **u_def(t)** : Deformation velocity at all observation dates
+- **u_bed(t)** : Basal sliding velocity = u_surf(t) - u_def(t)
+
+### Paramètres
+- **m, As** : Weertman friction parameters
+- **q, CN** : Lliboutry friction parameters
+- **c₁, c₂** : Empirical relation coefficients
+- **n** : Glen's flow law exponent (= 3)
+
+## Points clés à mettre dans le texte
+
+1. **Pas de calibration avec vitesses** :
+   > "Elmer/Ice simulations are purely diagnostic: no velocity observations 
+   > are used to constrain the model. The geometry (DEMs) alone determines 
+   > the modeled stress and velocity fields."
+
+2. **Rôle d'Eq. 7** :
+   > "Equations 7a-b serve as temporal interpolators: they establish 
+   > empirical relationships between ice thickness (continuously observed) 
+   > and Elmer outputs (available only at DEM dates), enabling continuous 
+   > reconstruction of τ_b(t) and u_def(t)."
+
+3. **Stratégie complémentaire** :
+   > "The approach combines the spatial completeness of numerical modeling 
+   > with the temporal resolution of field observations."

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib_scalebar.scalebar import ScaleBar
+from matplotlib.patches import FancyArrowPatch, Rectangle, FancyBboxPatch
 from pathlib import Path
 from collections import OrderedDict
 from matplotlib.ticker import LogFormatter
@@ -27,8 +28,8 @@ def plot_surface_vel_timeseries():
     """
     Plot observed surface vel timeseries for all glaciers defined in config.GLACIERS.
     """
-    left_panel = {'All': ['101'], 'Arg': ['5','4'], 'Gie': ['102'], 'MDG': ['tac','trel','ech']}
-    right_panel = {'Cor': ['B4','A4'], 'Geb': ['ss','sup'], 'Gie': ['5'], 'GB': ['sup','inf'], 'StSo': ['B','C']}
+    left_panel = {'Cor': ['B4','A4'], 'Geb': ['ss','sup'], 'Gie': ['5'], 'GB': ['sup','inf'], 'StSo': ['B','C']}
+    right_panel = {'All': ['101'], 'Arg': ['5','4'], 'Gie': ['102'], 'MDG': ['tac','trel','ech']}
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6),
                                   gridspec_kw={'width_ratios':[1,1]})
@@ -48,7 +49,9 @@ def plot_surface_vel_timeseries():
                 df = pd.read_csv(file)
 
                 label = f"{full_name} {stake}"
-                ax.plot(df['date'], df['velocity'], marker=marker, color=color,
+
+                mask = ~df['velocity'].isna()
+                ax.plot(df['date'][mask], df['velocity'][mask], marker=marker, color=color,
                         linestyle='-', label=label)
 
         ax.legend()
@@ -98,7 +101,9 @@ def plot_thk_changes_timeseries():
                 df = pd.read_csv(file)
 
                 label = f"{full_name} {stake}"
-                ax.plot(df['date'], df['altitude'] - df['altitude'].dropna().iloc[0], marker=marker, color=color,
+                
+                mask = ~df['altitude'].isna()
+                ax.plot(df['date'][mask], df['altitude'][mask] - df['altitude'][mask].iloc[0], marker=marker, color=color,
                         linestyle='-', label=label)
 
         ax.legend()
@@ -202,21 +207,181 @@ def plot_glaciers_longit_cs():
     plt.close(fig)
 
 
+plot_specs = [
+    ("All", "101", 6, 1),
+    ("Arg", "4", 0, 0),
+    ("Arg", "5", 0, 1),
+    ("Cor", "B4", 1, 0),
+    ("Cor", "A4", 1, 1),
+    ("Geb", "sup", 2, 0),
+    ("Geb", "ss", 2, 1),
+    ("Gie", "5", 3, 0),
+    ("Gie", "102", 3, 1),
+    ("GB", "inf", 4, 0),
+    ("GB", "sup", 4, 1),
+    ("MDG", "tac", 5, 0),
+    ("MDG", "trel", 5, 1),
+    ("MDG", "ech", 6, 0),
+    ("StSo", "B", 7, 0),
+    ("StSo", "C", 7, 1),
+]
 
-def plot_friction_laws():
-    """
-    Plots friction observed friction laws with best fits for all glaciers, and normalised frcition laws.
+def plot_reglin_taub_thk(m=3):
 
-    """
+    def plot_panel(ax, df, color, title, transform="thk4", extra_text=None):
+
+        if df is None or len(df) == 0:
+            return
+
+        x = df["thickness"]
+
+        if transform == "thk_slope":
+            x = x * (df["slope"])
+
+        y = df["tau_b_elmer"]
+
+        mask = np.isfinite(x) & np.isfinite(y)
+        x, y = x[mask], y[mask]
+
+        if len(x) == 0:
+            return
+
+        ax.scatter(x, y, color=color, marker='o')
+
+        if len(x) > 1:
+            p = np.polyfit(x, y, 1)
+            xx = np.linspace(x.min(), x.max(), 100)
+            ax.plot(xx, np.poly1d(p)(xx), '--', linewidth=1.2, color=color)
+
+        ax.set_title(title, fontsize=20)
+
+        if extra_text:
+            ax.text(
+                0.5, -0.2, extra_text,
+                transform=ax.transAxes,
+                ha='center', va='center',
+                fontsize=14, alpha=0.8
+            )
+
+
+    fig, axes = plt.subplots(8, 2, figsize=(12, 26))
+
+    for glacier, stake, r, c in plot_specs:
+
+        ax = axes[r, c]
+
+        file = proc_data_dir / f"mw{1/m:.3f}" / f"{glacier}_all_data_{stake}.csv"
+
+        if not file.exists():
+            print(f"[WARNING] missing file: {glacier}-{stake}")
+            continue
+
+        df = pd.read_csv(file)
+
+        color = GLACIERS[glacier]["colors"][stake]
+        title = f"{GLACIERS[glacier]['full_name']} {stake}"
+        if glacier =="GB":
+            trans, extra = "thk_slope", "Thickness * Slope"
+        else:
+            trans, extra = "thk", None
+        plot_panel(ax, df, color, title, trans, extra)
+
+    fig.supxlabel(r'Thickness (m)', fontsize=24)
+    fig.supylabel(r'Basal shear stress (MPa)', fontsize=24)
+
+    for ax in axes.ravel():
+        ax.tick_params(axis='both', labelsize=18, width=0.9)
+        ax.grid(True, linestyle='dotted')
+
+    plt.tight_layout()
+    fig.savefig(fig_dir / f"reglin_taub_thk_m{m}.pdf", dpi=200)
+    print("reglin_taub_thk saved")
+
+
+def plot_reglin_udef_thk4(m=3):
+
+    def plot_panel(ax, df, color, title, transform="thk4", extra_text=None):
+
+        if df is None or len(df) == 0:
+            return
+
+        x = df["thickness"]**4
+
+        if transform == "thk4_slope":
+            x = x * (df["slope"]**3)
+
+        y = df["u_def_elmer"]
+
+        mask = np.isfinite(x) & np.isfinite(y)
+        x, y = x[mask], y[mask]
+
+        if len(x) == 0:
+            return
+
+        ax.scatter(x, y, color=color, marker='o')
+
+        if len(x) > 1:
+            p = np.polyfit(x, y, 1)
+            xx = np.linspace(x.min(), x.max(), 100)
+            ax.plot(xx, np.poly1d(p)(xx), '--', linewidth=1.2, color=color)
+
+        ax.set_title(title, fontsize=20)
+
+        if extra_text:
+            ax.text(
+                0.5, -0.2, extra_text,
+                transform=ax.transAxes,
+                ha='center', va='center',
+                fontsize=14, alpha=0.8
+            )
+
+
+    fig, axes = plt.subplots(8, 2, figsize=(12, 26))
+
+    for glacier, stake, r, c in plot_specs:
+
+        ax = axes[r, c]
+
+        file = proc_data_dir / f"mw{1/m:.3f}" / f"{glacier}_all_data_{stake}.csv"
+
+        if not file.exists():
+            print(f"[WARNING] missing file: {glacier}-{stake}")
+            continue
+
+        df = pd.read_csv(file)
+
+        color = GLACIERS[glacier]["colors"][stake]
+        title = f"{GLACIERS[glacier]['full_name']} {stake}"
+        if glacier =="GB":
+            trans, extra = "thk4_slope", "Thickness$^4$ * Slope$^3$"
+        else:
+            trans, extra = "thk4", None
+        plot_panel(ax, df, color, title, trans, extra)
+
+    fig.supxlabel(r'Thickness$^4$', fontsize=24)
+    fig.supylabel(r'Deformation velocity $(m \cdot yr^{-1})$', fontsize=24)
+
+    for ax in axes.ravel():
+        ax.tick_params(axis='both', labelsize=18, width=0.9)
+        ax.grid(True, linestyle='dotted')
+
+    plt.tight_layout()    
+    fig.savefig(fig_dir / f"reglin_udef_thk4_m{m}.pdf", dpi=200)
+    print("reglin_udef_thk4 saved")
+
+
+
+def plot_friction_laws(m=3):
 
     x_ticks = [1, 2, 4, 6, 10, 20, 30, 50, 80, 100, 200, 300, 400, 500]
-    y_ticks = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.16, 0.2, 0.3]
+    y_ticks = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 
+               0.11, 0.12, 0.13, 0.14, 0.16, 0.2, 0.3]
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14,8))
     
     for glacier_key, glacier_data in GLACIERS.items():
         
-        for i, stake in enumerate(glacier_data['xy_coords'].keys()):
+        for stake in glacier_data['xy_coords'].keys():
 
             if stake == "Wheel": # only for comparison, not a studied point
                 continue
@@ -224,35 +389,67 @@ def plot_friction_laws():
             color = glacier_data['colors'][stake]
             marker = glacier_data['markers'][stake]
 
-            # raw data          
-            vel, tau = compile_vel_tau_timeseries(glacier_key, stake)
-            ax1.scatter(vel, tau, color=color, edgecolor='k', marker=marker, label=f"{glacier_data['full_name']} {stake}", zorder=10)
-
-            if glacier_key == "StSo": # too few data points to have a reliable fit
-                continue
-
-            # fit data
-            fit_file = glacier_data['friclaw_ts'][stake]
-            df_fit = pd.read_csv(fit_file)
-            
-            vel_fit = df_fit['vel_fit'].values
-            tau_fit = df_fit['tau_fit'].values
-            
-            ax1.plot(vel_fit, tau_fit, color=color, linewidth = 2)
-
-            # CN value
-            CN_value, q_value, As_value, m_value = get_friclaw_params(glacier_key, stake)
-            if stake!="ss":
-                ax1.axhline(y=CN_value, color=color, linestyle='--')
+            # RAW DATA
+            try:
+                vel, tau = compile_vel_tau_timeseries(glacier_key, stake, m)
                 
-            # Normalized version (ax2)
-            if glacier_key == "Geb": # keeping only hard bed glaciers
+                if vel is None or tau is None or len(vel) == 0 or len(tau) == 0:
+                    print(f"No data for {glacier_key}-{stake}")
+                    continue
+
+                if marker == '2':
+                    ax1.scatter(vel, tau, color=color, marker=marker,
+                                label=f"{glacier_data['full_name']} {stake}", zorder=10)
+                else:
+                    ax1.scatter(vel, tau, color=color, edgecolor='k', marker=marker,
+                                label=f"{glacier_data['full_name']} {stake}", zorder=10)
+
+            except Exception as e:
+                print(f"Skip {glacier_key}-{stake} (raw): {e}")
                 continue
-                 
-            vel_norm, tau_norm = calcul_normalised_friction_law(vel, tau, CN_value, As_value, m_value)
-            
-            ax2.scatter(vel_norm, tau_norm, color=color, edgecolor='k', marker=marker, label=f"{glacier_data['full_name']} {stake}")
-    
+
+            # FIT DATA
+            if glacier_key != "StSo":
+                try:
+                    fit_file = proc_data_dir / f"mw{1/m:.3f}" / "friction_fits" / f"{glacier_key}_{stake}_friclaw_ts.csv"
+
+                    if not Path(fit_file).exists():
+                        print(f"Missing fit file {glacier_key}-{stake}")
+                        continue
+
+                    df_fit = pd.read_csv(fit_file)
+
+                    ax1.plot(df_fit['vel_fit'], df_fit['tau_fit'], color=color, linewidth=2)
+
+                except Exception as e:
+                    print(f"Skip fit {glacier_key}-{stake}: {e}")
+
+            # PARAMS
+            try:
+                CN_value, q_value, As_value, m_value = get_friclaw_params(glacier_key, stake, m)
+            except Exception as e:
+                print(f"Skip params {glacier_key}-{stake}: {e}")
+                continue
+
+            if stake != "ss":
+                ax1.axhline(y=CN_value, color=color, linestyle='--')
+
+            # NORMALIZED
+            if (glacier_key == "Geb") or (glacier_key == "StSo"):
+                continue
+
+            try:
+                vel_norm, tau_norm = calcul_normalised_friction_law(vel, tau, CN_value, As_value, m_value)
+
+                if len(vel_norm) == 0:
+                    continue
+
+                ax2.scatter(vel_norm, tau_norm, color=color, edgecolor='k', marker=marker,
+                            label=f"{glacier_data['full_name']} {stake}")
+
+            except Exception as e:
+                print(f"Skip normalized {glacier_key}-{stake}: {e}")
+
     # Theoritical law
     V_values = np.arange(0.05,50,0.1)
     ax2.plot(V_values, [scaled_friction_law(u, 1) for u in V_values], color='k', label='cavitation law')
@@ -263,6 +460,7 @@ def plot_friction_laws():
     ax1.set_ylabel(r'Basal shear stress (MPa)')
     ax1.set_xscale('log')
     ax1.set_yscale('log')
+    ax1.set_ylim(0.01, 0.17)
     ax1.set_xticks([x for x in x_ticks if ax1.get_xlim()[0] <= x <= ax1.get_xlim()[-1]])
     ax1.set_yticks([y for y in y_ticks if ax1.get_ylim()[0] <= y <= ax1.get_ylim()[-1]])
 
@@ -291,8 +489,10 @@ def plot_friction_laws():
     ax1.legend().remove()
     fig.subplots_adjust(bottom=0.28)
     
-    fig.savefig(fig_dir / "friction_laws_main.pdf", dpi=200)
+    fig.savefig(fig_dir / f"friction_laws_main_m{m}.pdf", dpi=200)
     plt.close(fig)
+    print("friction_laws_main saved")
+
 
 
 
@@ -386,9 +586,224 @@ def plot_taub_vs_slope():
     plt.close(fig)
 
 
+
+def plot_methods_synthesis():
+
+    # Palette
+    C_INPUT   = "#c0392b"   # rouge — données d'entrée
+    C_MODEL   = "#1a6b9a"   # bleu  — étapes de modélisation
+    C_INTERP  = "#e67e22"   # orange — interpolation temporelle
+    C_OBS     = "#7a3c9c"   # violet — séries continues observées/dérivées
+    C_OUTPUT  = "#0f6b52"   # vert  — résultat final
+    C_ARROW   = "#555555"
+
+    def box(ax, x, y, w, h, col, title, sub1="", sub2="",
+            style="normal", fontsize_title=12):
+        """Dessine une boîte avec titre + sous-titres."""
+        alpha_fill = 0.12 if style == "normal" else 0.22
+        lw = 1.5 if style == "normal" else 2.0
+        ls = "-" if style != "dashed" else "--"
+
+        rect = FancyBboxPatch((x, y), w, h,
+                            boxstyle="round,pad=0.01",
+                            transform=ax.transAxes,
+                            facecolor=col + f"{int(alpha_fill*255):02x}",
+                            edgecolor=col, linewidth=lw,
+                            linestyle=ls, clip_on=False)
+        ax.add_patch(rect)
+
+        # Titre
+        n_subs = sum(1 for s in [sub1, sub2] if s)
+        if n_subs == 0:
+            ty = y + h * 0.50
+        elif n_subs == 1:
+            ty = y + h * 0.65
+        else:
+            ty = y + h * 0.75
+
+        ax.text(x + w/2, ty, title,
+                transform=ax.transAxes, ha="center", va="center",
+                fontsize=fontsize_title, fontweight="bold", color=col,
+                clip_on=False)
+        if sub1:
+            sy1 = y + h * (0.42 if n_subs == 2 else 0.32)
+            ax.text(x + w/2, sy1, sub1,
+                    transform=ax.transAxes, ha="center", va="center",
+                    fontsize=9, color=col, alpha=0.92, clip_on=False)
+        if sub2:
+            ax.text(x + w/2, y + h * 0.15, sub2,
+                    transform=ax.transAxes, ha="center", va="center",
+                    fontsize=9, color=col, alpha=0.85,
+                    style="italic", clip_on=False)
+
+
+    def arrow(ax, x0, y0, x1, y1, col=C_ARROW, lw=1.3, style="->",
+            label="", label_side="right"):
+        ax.annotate("",
+                    xy=(x1, y1), xytext=(x0, y0),
+                    xycoords="axes fraction", textcoords="axes fraction",
+                    arrowprops=dict(arrowstyle=style, color=col,
+                                    lw=lw, clip_on=False))
+        if label:
+            mx, my = (x0+x1)/2, (y0+y1)/2
+            dx = 0.03 if label_side == "right" else -0.03
+            ax.text(mx + dx, my, label,
+                    transform=ax.transAxes, ha="center", va="center",
+                    fontsize=7, color=col, alpha=0.85, clip_on=False,
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
+                            ec="none", alpha=0.7))
+
+
+    def label_badge(ax, x, y, text, col):
+        """Petit badge de colonne (discret / continu)."""
+        ax.text(x, y, text,
+                transform=ax.transAxes, ha="center", va="center",
+                fontsize=9, color="white", fontweight="bold", clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.3", fc=col, ec="none"))
+
+
+    # Figure
+    fig, ax = plt.subplots(figsize=(9, 7.5))
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    # ── Zones de fond : DISCRET vs CONTINU ───────────────────────────────────────
+    ax.add_patch(Rectangle((0.02, 0.52), 0.46, 0.48,
+                            transform=ax.transAxes,
+                            facecolor="#f8f0f0", edgecolor=C_INPUT,
+                            linewidth=1.2, linestyle=":", clip_on=False, zorder=0))
+    ax.add_patch(Rectangle((0.52, 0.34), 0.46, 0.34,
+                            transform=ax.transAxes,
+                            facecolor="#f7f3f0", edgecolor="#7a5a40",
+                            linewidth=1.2, linestyle=":", clip_on=False, zorder=0))
+
+    ### COLONNE GAUCHE — DISCRET (dates avec DEM)
+    # [1] DEMs éparses
+    box(ax, 0.04, 0.90, 0.42, 0.08, C_INPUT,
+        r"Surface & bed DEMs",
+        r"$z_s(x,y,t_{\mathrm{DEM}})$,  $z_b(x,y)$")
+
+    # [2] Force balance model
+    box(ax, 0.04, 0.72, 0.42, 0.12, C_MODEL,
+        "Force balance with Elmer/Ice",
+        r"Stokes solved at each $t_{\mathrm{DEM}}$")
+
+    # [3b] tau_b discret
+    box(ax, 0.04, 0.54, 0.15, 0.12, C_MODEL,
+        r"$\mathbf{\tau_b(t_{\mathrm{DEM}})}$",
+        "Basal shear stress",
+        "Force balance residual")
+
+    # [3a] u_def discret
+    box(ax, 0.31, 0.54, 0.15, 0.12, C_MODEL,
+        r"$\mathbf{u_\mathrm{def}(t_{\mathrm{DEM}})}$",
+        "Deformational velocity")
+
+    # [4b] SIA empirical relation
+    box(ax, 0.04, 0.36, 0.15, 0.12, C_INTERP,
+        r"$\mathbf{\tau_b (t) \approx f(H (t))}$",
+        r"via empirical relation",
+        r"$\tau_b \propto H$ (SIA)",
+        style="normal")
+
+    # [4a] SIA empirical relation
+    box(ax, 0.31, 0.36, 0.15, 0.12, C_INTERP,
+        r"$\mathbf{u_\mathrm{def} (t) \approx f(H (t))}$",
+        r"via empirical relation",
+        r"$u_\mathrm{def} \propto H^{n+1}$ (SIA)",
+        style="normal")
+
+    ### COLONNE DROITE — CONTINU (toutes les dates d'obs)
+    # [5] Observations
+    box(ax, 0.76, 0.36, 0.20, 0.30, C_OBS,
+        "Field\nobservations")
+
+    # [6a] H(t) continu
+    box(ax, 0.54, 0.54, 0.15, 0.12, C_OBS,
+        r"$\mathbf{H(t)}$",
+        "Continuous timeseries\nof ice thickness")
+
+    # [6b] u_surf continu
+    box(ax, 0.54, 0.36, 0.15, 0.12, C_OBS,
+        r"$\mathbf{u_\mathrm{surf}(t)}$",
+        "Continuous timeseries\nof surface velocity ")
+
+
+    ### RÉSULTAT FINAL — largeur totale
+    # [4b] SIA empirical relation
+    box(ax, 0.31, 0.18, 0.15, 0.12, C_INTERP,
+        r"$\mathbf{u_\mathrm{bed}(t)}$", 
+        r"$=$", 
+        r"$u_\mathrm{surf}(t) - u_\mathrm{def}(t)$",
+        style="normal")
+
+    # [4] Final friction law
+    box(ax, 0.10, 0.03, 0.80, 0.12, C_OUTPUT,
+        r"Friction law :  $\mathbf{\tau_b = f(u_b)}$",
+        r"Fit  $\tau_b(t)$ vs $u_\mathrm{bed}(t)$  with Weertman- and Lliboutry-type laws",
+        style="normal", fontsize_title=14)
+
+    # Flèches
+
+    arrow(ax, 0.25, 0.90, 0.25, 0.84, col=C_INPUT)  # DEM → force balance
+
+    arrow(ax, 0.15, 0.72, 0.15, 0.66, col=C_MODEL)  # Force balance → u_def
+    arrow(ax, 0.35, 0.72, 0.35, 0.66, col=C_MODEL)  # Force balance → tau_b
+
+    arrow(ax, 0.76, 0.60, 0.69, 0.60, col=C_OBS)    # Field obs → H
+    arrow(ax, 0.76, 0.42, 0.69, 0.42, col=C_OBS)    # Field obs → u_surf
+
+    arrow(ax, 0.35, 0.54, 0.35, 0.48, col=C_INTERP) # u_def → u_def interp
+    arrow(ax, 0.54, 0.54, 0.36, 0.48, col=C_OBS)    # H → u_def interp
+
+    arrow(ax, 0.15, 0.54, 0.15, 0.48, col=C_INTERP) # tau_b → tau_b interp
+    arrow(ax, 0.54, 0.54, 0.16, 0.48, col=C_OBS)    # H → tau_b interp
+
+    arrow(ax, 0.35, 0.36, 0.35, 0.30, col=C_INTERP) # u_def interp → u_bed interp
+    arrow(ax, 0.54, 0.36, 0.36, 0.30, col=C_OBS)    # u_surf obs → u_bed interp
+
+    arrow(ax, 0.15, 0.36, 0.36, 0.14, col=C_OUTPUT) # tau_b continu → friction law
+    arrow(ax, 0.35, 0.18, 0.38, 0.14, col=C_OUTPUT) # u_bed continu → friction law
+
+
+
+    # Annotations
+    ax.annotate("",
+                xy=(0.20, 0.58), xytext=(0.30, 0.58),
+                xycoords="axes fraction", textcoords="axes fraction",
+                arrowprops=dict(arrowstyle="<->", color=C_MODEL,
+                                lw=1.4, clip_on=False))
+
+    ax.text(0.25, 0.60, r"$u_b = A_s \tau_b^m$",
+            transform=ax.transAxes, ha="center", va="center",
+            fontsize=7, color=C_MODEL, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white",
+                    ec=C_MODEL, alpha=0.85))
+
+    ax.text(0.25, 0.42, "Temporal\ninterpolation",
+            transform=ax.transAxes, ha="center", va="center",
+            fontsize=7, color=C_INTERP, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white",
+                    ec=C_INTERP, alpha=0.85))
+
+    # Badge "few dates"
+    label_badge(ax, 0.25, 0.992, "few dates  $t_\\mathrm{DEM}$\nfull spatial coverage", C_INPUT)
+    # Badge "continuous"
+    label_badge(ax, 0.86, 0.67, "many dates t\nsparse spatial sampling", "#7a5a40")
+
+    plt.tight_layout(pad=0.3)
+    fig.savefig(fig_dir / "methods_synthesis.pdf", bbox_inches="tight", dpi=200)
+    print("methods_synthesis saved")
+
+
 if __name__ == "__main__":
-    plot_surface_vel_timeseries()
-    plot_thk_changes_timeseries()
-    plot_glaciers_longit_cs()
-    plot_friction_laws()
-    plot_taub_vs_slope()
+    # plot_surface_vel_timeseries()
+    # plot_thk_changes_timeseries()
+    # plot_glaciers_longit_cs()
+    plot_reglin_taub_thk(3)
+    plot_reglin_udef_thk4(3)
+    plot_friction_laws(1)
+    plot_friction_laws(3)
+    plot_friction_laws(6)
+    # plot_taub_vs_slope()
+    # plot_methods_synthesis()

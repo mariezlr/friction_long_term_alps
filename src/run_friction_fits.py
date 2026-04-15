@@ -2,19 +2,20 @@ import pandas as pd
 import numpy as np
 import json
 from pathlib import Path
-from utils import GLACIERS
+from utils import GLACIERS, proc_data_dir
 from friction_laws import fit_lliboutry_law, fit_tsai_law, fit_weertman_law
 
 script_dir = Path(__file__).resolve().parent
 
-out_dir = script_dir / ".." / "data" / "processed_timeseries" / "friction_fits"
-out_dir.mkdir(exist_ok=True, parents=True)
-
-def compile_vel_tau_timeseries(glacier_key, stake):
+def compile_vel_tau_timeseries(glacier_key, stake, m=3):
     if stake == "Wheel": # ignoring wheel data
         return None, None
 
-    file = GLACIERS[glacier_key]["all_data"][stake]
+    file = proc_data_dir / f"mw{1/m:.3f}" / f"{glacier_key}_all_data_{stake}.csv"
+
+    if not file.exists():
+        print(f"[WARNING] fichier manquant: {file}")
+        return None, None
             
     if stake in ["C", "ech"]: # recent data are unreliable at StSo C and MDG ech
         df = pd.read_csv(file)[lambda df: (df['date'] < 2015)]
@@ -48,7 +49,9 @@ def compile_vel_tau_timeseries(glacier_key, stake):
 
 
 
-def run_all_fits():
+def run_all_fits(m=3):
+    out_dir = proc_data_dir / f"mw{1/m:.3f}" / "friction_fits"
+    out_dir.mkdir(exist_ok=True, parents=True)
     results = {}
 
     guess_m, guess_As, guess_q = 3, 20000, 1
@@ -57,17 +60,17 @@ def run_all_fits():
 
     for glacier_key, glacier_data in GLACIERS.items():
         results[glacier_key] = {}
-
-        for stake, file in glacier_data["all_data"].items():
+        
+        for stake in glacier_data['xy_coords'].keys():
 
             if stake == "Wheel": # ignoring wheel data
                 continue
             
-            vel, tau = compile_vel_tau_timeseries(glacier_key, stake)
+            vel, tau = compile_vel_tau_timeseries(glacier_key, stake, m)
 
-            if tau.empty:
+            if tau is None or len(tau) == 0:
                 print(f"No data available for {stake} on {glacier_key}")
-                guess_CN = None  # ou une valeur par défaut raisonnable
+                continue
             else:
                 guess_CN = np.max(tau.values)
 
@@ -111,4 +114,6 @@ def run_all_fits():
     return results
 
 if __name__=="__main__":
-    fits = run_all_fits()
+    run_all_fits(1)
+    run_all_fits(3)
+    run_all_fits(6)

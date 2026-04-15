@@ -1,6 +1,6 @@
 # friction_long_term_alps
 
-Code and processed data to reproduce the analyses and figures of the study "Constraining the glacier basal friction law from multidecadal to century scales observations of surface velocity and thickness changes on Alpine glaciers" (M. Zeller, A. Gilbert, F. Gimbert).
+Code and processed data to reproduce the analyses and figures of the study "Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers" (M. Zeller, A. Gilbert, F. Gimbert).
 
 WARNING: Data and code are still being organized; final version will be released upon acceptance.
 
@@ -25,16 +25,13 @@ Bedrock and surface DEMs, velocity and elevation datasets for the Alpine glacier
 
 All raw and processed data are stored in the data/ directory.
 
-#### Geometric data
-Surface and bedrock DEMs are available on Zenodo : {insert link}.
-All DEMs are regridded to a common grid format to serve as input for Elmer/Ice simulations.
-
-Additional geometric datasets (glacier outlines, stake positions, etc.) are stored locally in data/structural/.
+#### Glacier geometric characteritics
+Additional geometric datasets (glacier outlines, stake positions, etc.) are stored in data/structural/.
 
 #### Timeseries
 Time series exist for each measurement stake on the studied glaciers. They include:
-- observational data: surface velocity, surface elevation change
-- processed data: deformation velocity, basal shear stress, sliding velocity
+- in-situ observational data: surface velocity, surface elevation change
+- processed data: deformation velocity, basal shear stress, basal sliding velocity
 
 Each stake has its own CSV file located in:
 data/processed_timeseries/{glacier}_{stake}_all_data.csv
@@ -47,13 +44,13 @@ data/processed_timeseries/friction_fits/
 
 Analysis code is located in src/, structured as follows:
 
-friction_laws.py -->    Functions to fit friction laws (Weertman, Lliboutry, Tsai) and compute optimized parameters.
+friction_laws.py        --> Functions to fit friction laws (Weertman, Lliboutry, Tsai) and compute optimized parameters.
 
-run_friction_fits.py -->    Functions to compute the best velocity and shear stress timeseries from all processed data and to apply the best fit with the appropriate friction law for each stake.
+run_friction_fits.py    --> Functions to compute the best velocity and shear stress timeseries from all processed data and to apply the best fit with the appropriate friction law for each stake.
 
-utils.py -->    GLACIERS dictionary containing geometric data, time series and fitted parameters for each stake. Initially populated with raw data and progressively enriched with outputs from run_friction_fits.py
+utils.py                --> GLACIERS dictionary containing geometric data, time series and fitted parameters for each stake. Initially built with raw data and progressively enriched with outputs from run_friction_fits.py
 
-plots.py -->    Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
+plots.py                --> Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
 
 
 ### 3. Plot figures
