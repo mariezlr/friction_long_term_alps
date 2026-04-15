@@ -688,25 +688,25 @@ def plot_methods_synthesis():
         "Force balance with Elmer/Ice",
         r"Stokes solved at each $t_{\mathrm{DEM}}$")
 
-    # [3b] tau_b discret
+    # [3a] tau_b discret
     box(ax, 0.04, 0.54, 0.15, 0.12, C_MODEL,
         r"$\mathbf{\tau_b(t_{\mathrm{DEM}})}$",
         "Basal shear stress",
         "Force balance residual")
 
-    # [3a] u_def discret
+    # [3b] u_def discret
     box(ax, 0.31, 0.54, 0.15, 0.12, C_MODEL,
         r"$\mathbf{u_\mathrm{def}(t_{\mathrm{DEM}})}$",
         "Deformational velocity")
 
-    # [4b] SIA empirical relation
+    # [4a] SIA empirical relation
     box(ax, 0.04, 0.36, 0.15, 0.12, C_INTERP,
         r"$\mathbf{\tau_b (t) \approx f(H (t))}$",
         r"via empirical relation",
         r"$\tau_b \propto H$ (SIA)",
         style="normal")
 
-    # [4a] SIA empirical relation
+    # [4b] SIA empirical relation
     box(ax, 0.31, 0.36, 0.15, 0.12, C_INTERP,
         r"$\mathbf{u_\mathrm{def} (t) \approx f(H (t))}$",
         r"via empirical relation",
@@ -730,14 +730,14 @@ def plot_methods_synthesis():
 
 
     ### RÉSULTAT FINAL — largeur totale
-    # [4b] SIA empirical relation
+    # [7] u_bed continu
     box(ax, 0.31, 0.18, 0.15, 0.12, C_INTERP,
         r"$\mathbf{u_\mathrm{bed}(t)}$", 
         r"$=$", 
         r"$u_\mathrm{surf}(t) - u_\mathrm{def}(t)$",
         style="normal")
 
-    # [4] Final friction law
+    # [8] Final friction law
     box(ax, 0.10, 0.03, 0.80, 0.12, C_OUTPUT,
         r"Friction law :  $\mathbf{\tau_b = f(u_b)}$",
         r"Fit  $\tau_b(t)$ vs $u_\mathrm{bed}(t)$  with Weertman- and Lliboutry-type laws",
