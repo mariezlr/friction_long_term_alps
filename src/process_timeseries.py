@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-Traitement des séries temporelles glaciaires.
-
-Reproduit le workflow du notebook Timeseries_Alpine_glaciers.ipynb :
+Workflow:
 1. Lit les sorties Elmer aux dates DEM
 2. Lit les observations in-situ (altitude, vitesse)
 3. Établit relations empiriques τ_b ~ H et u_def ~ H^4
@@ -79,7 +77,7 @@ def calc_tau_d(thickness, xgrad, ygrad, zgrad):
 # MOYENNAGE SPATIAL
 # ============================================================================
 
-def average_in_radius(glacier_name, df, x0, y0, radius, m, C, Hmin=20):
+def average_in_radius(glacier_name, stake_name, df, x0, y0, radius, m, C, Hmin=20):
     """
     Calcule les variables moyennées dans un rayon autour d'un point.
     
@@ -170,6 +168,10 @@ def average_in_radius(glacier_name, df, x0, y0, radius, m, C, Hmin=20):
         voisinage['xgrad']**2 + voisinage['ygrad']**2
     ).mean(skipna=True)
     
+    df_slopes = pd.read_csv(geom_data_dir / 'slopes/mean_slopes.csv', sep=",")
+    row = df_slopes[(df_slopes['glacier'] == glacier_name) & (df_slopes['stake'] == stake_name)]
+    slope_rad = row['mean_slope_rad_full'].values[0]
+    slope_dem = np.tan(slope_rad)
     return {
         'thick_elmer' : thick_elmer,
         'u_bed_elmer': vel_h_bed,
@@ -180,6 +182,7 @@ def average_in_radius(glacier_name, df, x0, y0, radius, m, C, Hmin=20):
         'u_def_elmer': vel_h_surf - vel_h_bed,
         'slope': slope,
         'averaged_slope': averaged_slope,
+        'slope_dem': slope_dem,
         'gradxmean': slopex,
         'gradymean': slopey,
         'gradzmean': slopez,
@@ -188,7 +191,7 @@ def average_in_radius(glacier_name, df, x0, y0, radius, m, C, Hmin=20):
     }
 
 
-def process_elmer_timeseries(glacier_name, years_DEM, x0, y0, radius, m, C, Hmin=20, Arg_simu=None):
+def process_elmer_timeseries(glacier_name, stake_name, years_DEM, x0, y0, radius, m, C, Hmin=20, Arg_simu=None):
     """
     Traite toutes les années Elmer pour un stake.
     
@@ -220,7 +223,7 @@ def process_elmer_timeseries(glacier_name, years_DEM, x0, y0, radius, m, C, Hmin
             continue
         
         # Moyenner dans rayon
-        result = average_in_radius(glacier_name, df_elmer, x0, y0, radius, m, C, Hmin)
+        result = average_in_radius(glacier_name, stake_name, df_elmer, x0, y0, radius, m, C, Hmin)
         
         if result is None:
             continue
@@ -343,7 +346,7 @@ def apply_empirical_relation(x_continuous, coeffs):
 # FONCTION PRINCIPALE
 # ============================================================================
 
-def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None):
+def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None, output_file=None):
     """
     Traite un glacier/stake complet.
     """
@@ -363,7 +366,7 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None)
     # 1. Traiter données Elmer
     print("\n→ Traitement données Elmer...")
     df_elmer = process_elmer_timeseries(
-        glacier_name, years_DEM, x0, y0, radius, m, C, Hmin, Arg_simu=Arg_simu
+        glacier_name, stake_name, years_DEM, x0, y0, radius, m, C, Hmin, Arg_simu=Arg_simu
     )
     print(f"  ✓ {len(df_elmer)} dates Elmer")
     
@@ -411,13 +414,45 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None)
     df_elmer["date"] = df_elmer["date"].astype(float)
     df_obs["date"]   = df_obs["date"].astype(float)
 
+    # Initialiser df_merged_dem avec le merge_asof complet
     df_merged_dem = pd.merge_asof(
         df_elmer,
         df_obs,
         on="date",
-        direction="nearest",   # prend la date la plus proche
-        tolerance=2            # tolérance de ±2 ans
+        direction="nearest",
+        tolerance=4
     )
+
+    # Vérifier quelle date obs a été matchée
+    df_check = pd.merge_asof(
+        df_elmer[['date']],
+        df_obs[['date']].rename(columns={'date': 'date_obs_matched'}),
+        left_on='date',
+        right_on='date_obs_matched',
+        direction='nearest',
+        tolerance=4
+    )
+    print(df_check.to_string())
+
+    # Combler les NaN colonne par colonne avec la date la plus proche (ignore NaN dans df_obs)
+    cols_obs = ['velocity', 'altitude', 'thickness']
+    for col in cols_obs:
+        if col not in df_obs.columns:
+            continue
+        df_temp = df_obs[['date', col]].dropna().sort_values('date')
+        df_merged_dem = pd.merge_asof(
+            df_merged_dem,
+            df_temp.rename(columns={col: f'{col}_fill'}),
+            on='date',
+            direction='nearest',
+            tolerance=4
+        )
+        df_merged_dem[col] = df_merged_dem[col].fillna(df_merged_dem[f'{col}_fill'])
+        df_merged_dem.drop(columns=f'{col}_fill', inplace=True)
+
+    # Mettre date en premier
+    cols = ['date'] + [col for col in df_merged_dem.columns if col != 'date']
+    df_merged_dem = df_merged_dem[cols]
     
     print(f"  ✓ {len(df_merged_dem)} dates avec Elmer ET observations")
     
@@ -428,32 +463,32 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None)
     # 4. Ajuster relations empiriques
     print("\n→ Ajustement relations empiriques...")
     
-    # if glacier_name == None: # Exception glacier blanc où on utilise la pente
-    #     # τ_b ~ H \times slope
-    #     HS = (df_merged_dem['thickness'].values) * (df_merged_dem['slope'].values)
-    #     coeffs_tau = fit_empirical_relation(
-    #         HS, df_merged_dem['tau_b_elmer'].values, degree=1)
+    if glacier_name == "GB": # Exception glacier blanc où on utilise la pente
+        # τ_b ~ H \times slope
+        HS = (df_merged_dem['thickness'].values) * (np.arctan(df_merged_dem['slope']).values)
+        coeffs_tau = fit_empirical_relation(
+            HS, df_merged_dem['tau_b_elmer'].values, degree=1)
         
-    #     # u_def ~ H^4 \times slope^3
-    #     H4S3 = (df_merged_dem['thickness'].values ** 4) * (df_merged_dem['slope'].values ** 3)
-    #     coeffs_udef = fit_empirical_relation(
-    #         H4S3, df_merged_dem['u_def_elmer'].values, degree=1)
+        # u_def ~ H^4 \times slope^3
+        H4S3 = (df_merged_dem['thickness'].values ** 4) * (np.arctan(df_merged_dem['slope']).values ** 3)
+        coeffs_udef = fit_empirical_relation(
+            H4S3, df_merged_dem['u_def_elmer'].values, degree=1)
     
-    # else:
-    # τ_b ~ H (linéaire)
-    coeffs_tau = fit_empirical_relation(
-        df_merged_dem['thickness'].values,
-        df_merged_dem['tau_b_elmer'].values, degree=1)
-    
-    # u_def ~ H^4 (linéaire en H^4)
-    H4 = df_merged_dem['thickness'].values ** 4
-    coeffs_udef = fit_empirical_relation(
-        H4, df_merged_dem['u_def_elmer'].values, degree=1)
+    else:
+        # τ_b ~ H (linéaire)
+        coeffs_tau = fit_empirical_relation(
+            df_merged_dem['thickness'].values,
+            df_merged_dem['tau_b_elmer'].values, degree=1)
+        
+        # u_def ~ H^4 (linéaire en H^4)
+        H4 = df_merged_dem['thickness'].values ** 4
+        coeffs_udef = fit_empirical_relation(
+            H4, df_merged_dem['u_def_elmer'].values, degree=1)
 
-    if coeffs_tau is not None:
-        print(f"  ✓ τ_b = {coeffs_tau[0]:.2e} * H + {coeffs_tau[1]:.2e}")
-    if coeffs_udef is not None:
-        print(f"  ✓ u_def = {coeffs_udef[0]:.2e} * H^4 + {coeffs_udef[1]:.2e}")
+        if coeffs_tau is not None:
+            print(f"  ✓ τ_b = {coeffs_tau[0]:.2e} * H + {coeffs_tau[1]:.2e}")
+        if coeffs_udef is not None:
+            print(f"  ✓ u_def = {coeffs_udef[0]:.2e} * H^4 + {coeffs_udef[1]:.2e}")
 
 
     # 5. Appliquer aux observations continues
@@ -465,51 +500,108 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None)
         print(f"  thickness fit range: {df_merged_dem['thickness'].min():.1f} - {df_merged_dem['thickness'].max():.1f}")
         print(f"  thickness obs range: {df_obs['thickness'].min():.1f} - {df_obs['thickness'].max():.1f}")
 
-        # if glacier_name == None:
-        #     df_slope = df_merged_dem[['date', 'slope']].drop_duplicates('date')
-        #     df_obs['slope'] = np.interp(df_obs['date'].values, df_slope['date'].values, df_slope['slope'].values)
+        if glacier_name == "GB":
+            df_slope = df_merged_dem[['date', 'slope']].drop_duplicates('date')
+            df_obs['slope'] = np.interp(df_obs['date'].values, df_slope['date'].values, df_slope['slope'].values)
 
-        #     df_obs['obs_tau_b'] = apply_empirical_relation(
-        #         (df_obs['thickness'].values) * (df_obs['slope']), coeffs_tau
-        #     )
+            df_obs['obs_tau_b'] = apply_empirical_relation(
+                (df_obs['thickness'].values) * (df_obs['slope']), coeffs_tau
+            )
             
-        #     df_obs['obs_u_def'] = apply_empirical_relation(
-        #         (df_obs['thickness'].values)** 4 *(df_obs['slope'].values)**3, coeffs_udef
-        #     )
+            df_obs['obs_u_def'] = apply_empirical_relation(
+                (df_obs['thickness'].values)** 4 *(df_obs['slope'].values)**3, coeffs_udef
+            )
 
-        #     df_obs = df_obs.drop(columns=['slope'])  # ← évite slope_x/slope_y plus tard
+            df_obs = df_obs.drop(columns=['slope'])  # ← évite slope_x/slope_y plus tard
         
-        # else:
-        df_obs['obs_tau_b'] = apply_empirical_relation(
-            df_obs['thickness'].values, coeffs_tau
-        )
-        
-        df_obs['obs_u_def'] = apply_empirical_relation(
-            df_obs['thickness'].values ** 4, coeffs_udef
-        )
-        
+        elif glacier_name == "StSo":
+            # Interpolation linéaire des tau_b Elmer sur les dates d'observation
+            df_obs['obs_tau_b'] = np.interp(
+                df_obs['date'].values, 
+                df_merged_dem['date'].values, 
+                df_merged_dem['tau_b_elmer'].values
+            )
+
+            df_obs['obs_u_def'] = np.interp(
+                df_obs['date'].values, 
+                df_merged_dem['date'].values, 
+                df_merged_dem['u_def_elmer'].values
+            )
+
+            df_obs['obs_tau_b_reglin'] = apply_empirical_relation(
+                df_obs['thickness'].values, coeffs_tau
+            )
+            
+            df_obs['obs_u_def_reglin'] = apply_empirical_relation(
+                df_obs['thickness'].values ** 4, coeffs_udef
+            )
+
+        else:
+            df_obs['obs_tau_b'] = apply_empirical_relation(
+                df_obs['thickness'].values, coeffs_tau
+            )
+            
+            df_obs['obs_u_def'] = apply_empirical_relation(
+                df_obs['thickness'].values ** 4, coeffs_udef
+            )
+            
         # Calculer u_bed
         if 'velocity' in df_obs.columns:
             df_obs['obs_u_bed'] = df_obs['velocity'] - df_obs['obs_u_def']
     
     # 6. Fusionner tout
     print("\n→ Création dataset final...")
+    # df_final = pd.merge(
+    #     df_merged_dem,
+    #     df_obs,
+    #     on='date',
+    #     how='outer'
+    # )
+
+    # 6. Fusionner tout
+    print("\n→ Création dataset final...")
+
+    # D'abord merger les colonnes obs calculées (obs_tau_b etc) via asof
+    cols_calculated = [c for c in ['obs_tau_b', 'obs_u_def', 'obs_u_bed'] if c in df_obs.columns]
+
+    for col in cols_calculated:
+        df_temp = df_obs[['date', col]].dropna().sort_values('date')
+        df_merged_dem = pd.merge_asof(
+            df_merged_dem,
+            df_temp.rename(columns={col: f'{col}_fill'}),
+            on='date',
+            direction='nearest',
+            tolerance=4
+        )
+        df_merged_dem[col] = df_merged_dem.get(col, np.nan)
+        df_merged_dem[col] = df_merged_dem[col].fillna(df_merged_dem[f'{col}_fill'])
+        df_merged_dem.drop(columns=f'{col}_fill', inplace=True)
+
+    # Ensuite merger outer pour les dates obs-only
     df_final = pd.merge(
-        df_elmer,
+        df_merged_dem,
         df_obs,
         on='date',
-        how='outer'
+        how='outer',
+        suffixes=('', '_obs')
     )
+
+    obs_cols = [col for col in df_final.columns if col.endswith('_obs')]
+    for col in obs_cols:
+        original = col.replace('_obs', '')
+        df_final[original] = df_final[original].fillna(df_final[col])
+        df_final.drop(columns=col, inplace=True)
 
     df_final = df_final.sort_values('date').reset_index(drop=True)
     
     # 7. Sauvegarder
     output_dir = Path(script_dir / '..' / 'data' / 'processed_timeseries' / f'mw{1/m:.3f}')
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    output_file = output_dir / f'{glacier_name}_all_data_{stake_name}.csv'
+
+    if output_file is None:
+        output_file = output_dir / f'{glacier_name}_all_data_{stake_name}.csv'
     df_final.to_csv(output_file, index=False)
-    
+
     print(f"\n✓ Sauvegardé: {output_file}")
     print(f"  {len(df_final)} lignes au total")
     print(f"  Colonnes: {list(df_final.columns)}")
@@ -537,7 +629,7 @@ def process_all_glaciers(m_index):
         for stake_name in config['xy_coords'].keys():
             try:
                 process_glacier_stake(
-                    glacier_name, stake_name, config, m, C,
+                    glacier_name, stake_name, config, m, C
                 )
             except Exception as e:
                 print(f"\n✗ Erreur {glacier_name} - {stake_name}: {e}")
@@ -555,8 +647,18 @@ def process_all_glaciers(m_index):
 # ============================================================================
 
 if __name__ == '__main__':
-# ## Toutes les stakes
+    ## Toutes les stakes
+    # for m_index in range(3):
+    #     process_all_glaciers(m_index)
+
+    ## Juste une stake
     for m_index in range(3):
+        glacier_name="StSo"
+        config = GLACIERS[glacier_name]
+        m, C = config['mval_Cval'][m_index]
 
-        process_all_glaciers(m_index)
+        stake_name="B"
+        process_glacier_stake(glacier_name, stake_name, config, m, C)
 
+        stake_name="C"
+        process_glacier_stake(glacier_name, stake_name, config, m, C)

@@ -27,8 +27,8 @@ def compile_vel_tau_timeseries(glacier_key, stake, m=3):
         print(f"[WARNING] fichier manquant: {file}")
         return None, None, None
     
-    # enlever les points à trop basses vitesses qui sont peu fiables (StSo C and MDG ech and GB)
-    if glacier_key in ["Geb"] or stake in ["A4", "ech"]:
+    # enlever les points à trop basses vitesses qui sont peu fiables
+    if stake in ["A4"]:
         df = pd.read_csv(file)[lambda df: (df['date'] < 2010)]
     elif glacier_key == "GB":
         df = pd.read_csv(file)[lambda df: (df['date'] < 1990)]
@@ -39,23 +39,14 @@ def compile_vel_tau_timeseries(glacier_key, stake, m=3):
 
     if df['date'].isna().any():
         print(f"Warning: {glacier_key} {stake} contient des NaN dans 'date'.")
-
-    # interpolate elmer/ice values to have a complete timeseries
-    df['tau_b_elmer_interp'] = df.set_index('date')["tau_b_elmer"].interpolate(method='index').tolist()
-    df['u_def_elmer_interp'] = df.set_index('date')["u_def_elmer"].interpolate(method='index').tolist()
-    df['u_bed_elmer_interp'] = df["velocity"] - df['u_def_elmer_interp']
     
-    # if glacier_key in ["StSo", "Geb", "GB"]:
-    #     vel, tau = df["u_bed_elmer_interp"], df["tau_b_elmer_interp"]
-    # else:
     date, vel, tau = df["date"], df['obs_u_bed'], df['obs_tau_b']
-    velmin=2
+    velmin=0.01
 
     valid_indices = np.isfinite(vel) & np.isfinite(tau) & (vel > velmin)
     date, vel, tau = date[valid_indices], vel[valid_indices], tau[valid_indices]
 
     return date, vel, tau
-
 
 
 def run_all_fits(m=3):
@@ -89,12 +80,12 @@ def run_all_fits(m=3):
                         vel, tau, [guess_CN, guess_q, guess_As, guess_m], fix_m=3, fix_q=1)
                 fit_type="Lliboutry"
                 
-            elif (glacier_key == "Geb"):# & (stake == "sup"):
+            elif (glacier_key == "Geb") & (stake == "sup"):
                 fit = fit_tsai_law(vel, tau, [guess_CN, guess_As, guess_m])
                 fit_type="Tsai"
-            # elif (glacier_key == "Geb") & (stake == "ss"): # no ancient data to constrain the plateau so we put an artificial threshold for the fit
-            #     fit = fit_tsai_law(vel, tau, [guess_CN, guess_As, guess_m], fix_CN=0.05, velmax=np.max(vel))
-            #     fit_type="Tsai"
+            elif (glacier_key == "Geb") & (stake == "ss"): # no ancient data to constrain the plateau so we put an artificial threshold for the fit
+                fit = fit_tsai_law(vel, tau, [guess_CN, guess_As, guess_m], fix_CN=0.05, velmax=np.max(vel))
+                fit_type="Tsai"
             # else:
             #     fit = fit_weertman_law(vel, tau, [guess_As, guess_m], fix_m=3)
             #     fit_type="Weertman"
@@ -102,8 +93,9 @@ def run_all_fits(m=3):
             results[glacier_key][stake] = fit
 
             # saving friction law timeseries for each stake
-            fits_df = pd.DataFrame({"vel_fit" : fit.get("vel_fit"),
-                                    "tau_fit" : fit.get("tau_fit")})
+            fits_df = pd.DataFrame({
+                "vel_fit" : fit.get("vel_fit"),
+                "tau_fit" : fit.get("tau_fit")})
             fits_df.to_csv(out_dir / f"{glacier_key}_{stake}_friclaw_ts.csv", index=False)
 
             fit_rows.append({

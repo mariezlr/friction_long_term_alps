@@ -18,43 +18,37 @@ Bedrock and surface DEMs, velocity and elevation datasets for the Alpine glacier
 - French glaciers monitoring programs (Saint-Sorlin: [Vincent et al., 2000](https://doi.org/10.3189/172756500781833052); Argentière: [Vincent et al., 2009](https://doi.org/10.3189/172756409787769500))
 
 
+## Project structure
 
-## Workflow overview
+```
+friction_long_term_alps/
+├── data/
+│   ├── elmer_raw/               # Elmer/Ice outputs per stake (subdirs mw1, mw3, mw6)
+│   ├── obs_raw/                 # Raw observational data (velocity, altitude, thickness)
+│   ├── processed_timeseries/    # Final timeseries and friction reconstructions per stake
+│   │   └── mw{value}/
+│   │       └── friction_fits/
+│   ├── structural/
+│   │   ├── outlines/            # Glacier outlines
+│   │   ├── bedrocks/            # Bedrock DEMs
+│   │   ├── flowlines/           # Flowline coordinates
+│   │   ├── slopes/              # Pre-computed slope CSVs (output of slope_calculation.py)
+│   │   └── surfaces/            # Surface DEMs per glacier and year (.dat files)
+│   └── uncertainties/           # Elmer outputs for uncertainty ensemble (varying A, C)
+├── src/
+│   ├── utils.py                 # GLACIERS dict: all metadata, coordinates, parameters
+│   ├── slope_calculation.py     # DEM-based slope computation per stake
+│   ├── process_timeseries.py    # Main pipeline: calibration + friction reconstruction
+│   ├── process_uncertainties.py # Same pipeline over uncertainty ensemble
+│   ├── friction_laws.py         # Friction laws, stress calculations, empirical fits
+│   ├── run_friction_fits.py     # Entry point: runs fits over all glaciers/stakes
+│   └── plots/                   # Scripts reproducing all manuscript figures
+└── figures/                     # Output figures
+```
 
-### 1. Data acquisition
-
-All raw and processed data are stored in the data/ directory.
-
-#### Glacier geometric characteritics
-Additional geometric datasets (glacier outlines, stake positions, etc.) are stored in data/structural/.
-
-#### Timeseries
-Time series exist for each measurement stake on the studied glaciers. They include:
-- in-situ observational data: surface velocity, surface elevation change
-- processed data: deformation velocity, basal shear stress, basal sliding velocity
-
-Each stake has its own CSV file located in:
-data/processed_timeseries/{glacier}_{stake}_all_data.csv
-
-Results from friction law fitting (best-fit parameters and modeled velocity–stress relationships) are stored separately in:
-data/processed_timeseries/friction_fits/
-
-
-### 2. Data processing and analysis
-
-Analysis code is located in src/, structured as follows:
-
-friction_laws.py        --> Functions to fit friction laws (Weertman, Lliboutry, Tsai) and compute optimized parameters.
-
-run_friction_fits.py    --> Functions to compute the best velocity and shear stress timeseries from all processed data and to apply the best fit with the appropriate friction law for each stake.
-
-utils.py                --> GLACIERS dictionary containing geometric data, time series and fitted parameters for each stake. Initially built with raw data and progressively enriched with outputs from run_friction_fits.py
-
-plots.py                --> Plot utilities that reproduce the figures of the manuscript using data stored in GLACIERS.
+**Glaciers:** Allalin (All), Argentière (Arg), Saint-Sorlin (StSo), Glacier Blanc (GB), Gébroulaz (Geb), Giétro (Gie), Corbassière (Cor), Mer de Glace (MDG)
 
 
-### 3. Plot figures
+## Figures
 
-All important paper figures can be generated using functions in plots.py
-
-Output figures are saved in figures/
+All manuscript figures can be reproduced from `src/plots/`. Output is saved to `figures/`.

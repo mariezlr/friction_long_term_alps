@@ -27,11 +27,6 @@ def get_flowline_idx(glacier_name, stake_name):
     row = df_idx[(df_idx['glacier'] == glacier_name) & (df_idx['stake'] == stake_name)]
     return row['idx'].values[0]
 
-def get_slope(glacier_name, stake_name):
-    df_slopes = pd.read_csv(data_dir / 'mean_slopes.csv', sep=",")
-    row = df_slopes[(df_slopes['glacier'] == glacier_name) & (df_slopes['stake'] == stake_name)]
-    return row['mean_slope_deg'].values
-
 def get_friclaw_params(glacier_name, stake_name, mw=3):
     df_slopes = pd.read_csv(proc_data_dir / f'mw{1/mw:.3f}' / 'friction_fits' / 'friction_fit_params.csv', sep=",")
     row = df_slopes[(df_slopes['glacier'] == glacier_name) & (df_slopes['stake'] == stake_name)]
@@ -52,7 +47,6 @@ GLACIERS = {
         'xy_coords': {'101': get_xy_coords("All", "101")},
         'flowline_idx': {'101': get_flowline_idx("All", "101")},
         'avg_dist': {'101': 390},
-        'slope_60_80': {'101': get_slope("All", "101")},
         'colors': {'101':'#5F9EA0'},
         'markers' :{'101': '8'},
         'mval_Cval' : [[1,0.003], [3,0.034], [6, 0.065]]
@@ -69,9 +63,6 @@ GLACIERS = {
         'flowline_idx': {'Wheel': get_flowline_idx("Arg", "wheel"),
                       '4': get_flowline_idx("Arg", "4"),
                       '5': get_flowline_idx("Arg", "5")},         
-        'slope_60_80': {'Wheel': get_slope("Arg", "Wheel"),
-                        '4': get_slope("Arg", "4"),
-                        '5': get_slope("Arg", "5")},
         'avg_dist': {'Wheel': 1, '4': 250, '5': 690},
         'colors': {'Wheel':'#CC79A7','4':'#AA4466','5':'#661100'},
         'markers': {'Wheel':'^','4':'v','5':'.'},
@@ -87,8 +78,6 @@ GLACIERS = {
                       'B4': get_xy_coords("Cor", "B4")},
         'flowline_idx': {'A4': get_flowline_idx("Cor", "A4"),
                       'B4': get_flowline_idx("Cor", "B4")},        
-        'slope_60_80': {'A4': get_slope("Cor", "A4"),
-                        'B4': get_slope("Cor", "B4")},  
         'avg_dist': {'A4': 390, 'B4': 360},
         'colors': {'A4':'#FF5733','B4':'#FFC300'},
         'markers': {'A4':'p','B4':'^'},
@@ -103,13 +92,11 @@ GLACIERS = {
         'xy_coords': {'sup': get_xy_coords("Geb", "sup"),
                       'ss': get_xy_coords("Geb", "ss")},
         'flowline_idx': {'sup': get_flowline_idx("Geb", "sup"),
-                      'ss': get_flowline_idx("Geb", "ss")}, 
-        'slope_60_80': {'sup': get_slope("Geb", "sup"),
-                        'ss': get_slope("Geb", "ss")},        
+                      'ss': get_flowline_idx("Geb", "ss")},       
         'avg_dist':{'sup': 150, 'ss': 50},
         'colors': {'sup':'#669966','ss':'#999999'},
         'markers': {'sup':'s','ss':'2'},
-        'mval_Cval' : [[1,0.001], [3,0.006], [6, 0.012]]
+        'mval_Cval' : [[1,0.006], [3,0.081], [6, 0.156]]
     },
     'Gie': {
         'full_name': "Giétro",
@@ -121,8 +108,6 @@ GLACIERS = {
                       '102': get_xy_coords("Gie", "102")},
         'flowline_idx': {'5': get_flowline_idx("Gie", "5"),
                          '102': get_flowline_idx("Gie", "102")},  
-        'slope_60_80': {'5': get_slope("Gie", "5"),
-                        '102': get_slope("Gie", "102")}, 
         'avg_dist':{'5': 300, '102': 70},
         'colors': {'5':'#117733','102':'#009E73'},
         'markers': {'5':'<','102':'>'},
@@ -137,9 +122,7 @@ GLACIERS = {
         'xy_coords': {'inf': get_xy_coords("GB", "inf"),
                       'sup': get_xy_coords("GB", "sup")},
         'flowline_idx': {'inf': get_flowline_idx("GB", "inf"),
-                      'sup': get_flowline_idx("GB", "sup")},        
-        'slope_60_80': {'inf': get_slope("GB", "inf"),
-                        'sup': get_slope("GB", "sup")},   
+                      'sup': get_flowline_idx("GB", "sup")},         
         'avg_dist':{'inf': 260, 'sup': 230},
         'colors': {'inf':'#56B4E9','sup':'#0072B2'},
         'markers': {'inf':'H','sup':'h'},
@@ -157,9 +140,6 @@ GLACIERS = {
         'flowline_idx': {'ech': get_flowline_idx("MDG", "ech"),
                       'trel': get_flowline_idx("MDG", "trel"),
                       'tac': get_flowline_idx("MDG", "tac")},
-        'slope_60_80': {'ech': get_slope("MDG", "ech"),
-                        'trel': get_slope("MDG", "trel"),
-                        'tac': get_slope("MDG", "tac")},  
         'avg_dist':{'ech': 550, 'trel': 310, 'tac': 200},
         'colors': {'ech':'#F0E442','trel':'#E69F00', 'tac':'#D55E00'},
         'markers': {'ech':'D','trel':'*', 'tac':'o'},
@@ -174,12 +154,31 @@ GLACIERS = {
         'xy_coords': {'B': get_xy_coords("StSo", "B"),
                       'C': get_xy_coords("StSo", "C")},
         'flowline_idx': {'B': get_flowline_idx("StSo", "B"),
-                      'C': get_flowline_idx("StSo", "C")},
-        'slope_60_80': {'B': get_slope("StSo", "B"),
-                        'C': get_slope("StSo", "C")},   
+                      'C': get_flowline_idx("StSo", "C")},  
         'avg_dist':{'B': 160, 'C': 80},
         'colors': {'B':'#882255','C':'#AA4499'},
         'markers': {'B':'*','C':'d'},
         'mval_Cval' : [[1,0.004], [3,0.048], [6, 0.092]]
     }
 }
+
+
+plot_specs = [
+    ("All", "101", 6, 1),
+    ("Arg", "4", 0, 0),
+    ("Arg", "5", 0, 1),
+    ("Cor", "B4", 1, 0),
+    ("Cor", "A4", 1, 1),
+    ("Geb", "sup", 2, 0),
+    ("Geb", "ss", 2, 1),
+    ("Gie", "5", 3, 0),
+    ("Gie", "102", 3, 1),
+    ("GB", "inf", 4, 0),
+    ("GB", "sup", 4, 1),
+    ("MDG", "tac", 5, 0),
+    ("MDG", "trel", 5, 1),
+    ("MDG", "ech", 6, 0),
+    ("StSo", "B", 7, 0),
+    ("StSo", "C", 7, 1),
+]
+

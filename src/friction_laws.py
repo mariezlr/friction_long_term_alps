@@ -15,7 +15,7 @@ def power_law(u_bed, As, m=3):
     tau_b = (u_bed/As)**(1/m)
     return tau_b
 
-def fit_weertman_law(vel, tau, initial_guess, velmin = 2, velmax = 220, 
+def fit_weertman_law(vel, tau, initial_guess, velmin = 0.01, velmax = 220, 
                      fix_m=None, fix_As=None):
     """
     Fits a Weertman-type friction law to velocity/shear-stress data.
@@ -62,7 +62,7 @@ def fit_weertman_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
     tau_pred = power_law(vel, As_fit, m_fit)
     rmse = np.sqrt(mean_squared_error(tau, tau_pred))
 
-    vel_fit = np.linspace(velmin, velmax, 100)
+    vel_fit = np.linspace(velmin, velmax, 1000)
     tau_fit = power_law(vel_fit, As_fit, m_fit)
 
     return {"As": As_fit, "m": m_fit,
@@ -89,7 +89,7 @@ def cavitation_law(u_bed, CN, q, As, m=3): # no rate weakening
     return tau_b
 
 
-def fit_lliboutry_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
+def fit_lliboutry_law(vel, tau, initial_guess, velmin = 0.01, velmax = 220,
                   fix_CN=None, fix_q=None, fix_As=None, fix_m=None,):
     """
     Fits Lliboutry friction law for basal sliding, allowing free or fixed parameters.
@@ -130,7 +130,7 @@ def fit_lliboutry_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
     tau_pred = cavitation_law(vel, CN_fit, q_fit, As_fit, m_fit)
     rmse = np.sqrt(mean_squared_error(tau, tau_pred))
 
-    vel_fit = np.linspace(velmin, velmax, 100)
+    vel_fit = np.linspace(velmin, velmax, 1000)
     tau_fit = cavitation_law(vel_fit, CN_fit, q_fit, As_fit, m_fit)
 
 
@@ -146,7 +146,7 @@ def tsai_law(u_bed, CN, As, m):
     return tau_b
 
 
-def fit_tsai_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
+def fit_tsai_law(vel, tau, initial_guess, velmin = 0.01, velmax = 220,
                  fix_CN=None, fix_As=None, fix_m=None):
     """
     Fit the Tsai basal friction law tau_b(u) to observed (velocity, stress) data.
@@ -197,7 +197,7 @@ def fit_tsai_law(vel, tau, initial_guess, velmin = 2, velmax = 220,
     tau_pred = tsai_law(vel, CN_fit, As_fit, m_fit)
     rmse = np.sqrt(mean_squared_error(tau, tau_pred))
 
-    vel_fit = np.linspace(velmin, velmax, 100)
+    vel_fit = np.linspace(velmin, velmax, 1000)
     tau_fit = tsai_law(vel_fit, CN_fit, As_fit, m_fit)
 
     return {"CN": CN_fit, "As": As_fit, "m": m_fit, 

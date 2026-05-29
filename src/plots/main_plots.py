@@ -5,7 +5,7 @@ from pathlib import Path
 src_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(src_dir))
 
-from utils import GLACIERS, fig_dir, data_dir, get_friclaw_params
+from utils import GLACIERS, fig_dir, data_dir, geom_data_dir, get_friclaw_params
 from friction_laws import *
 from run_friction_fits import *
 import numpy as np
@@ -138,17 +138,16 @@ def plot_glaciers_longit_cs():
     """
     Plot flowlines, outlines, and longitudinal profiles for all glaciers defined in config.GLACIERS.
     """
-    global GLACIERS 
     order = ['All', 'Gie', 'Arg', 'GB', 'Cor', 'MDG', 'Geb', 'StSo']
-    GLACIERS = OrderedDict((k, GLACIERS[k]) for k in order if k in GLACIERS)
+    GLACIERS_sorted = OrderedDict((k, GLACIERS[k]) for k in order if k in GLACIERS)
 
 
-    n_glaciers = len(GLACIERS)
+    n_glaciers = len(GLACIERS_sorted)
     n_rows = (n_glaciers * 2 + 3) // 4  # 2 axes per glacier / 4 columns
     fig, axes = plt.subplots(n_rows, 4, figsize=(24, 15))
     axes = axes.ravel()
 
-    for i, (glacier_name, glacier_data) in enumerate(GLACIERS.items()):
+    for i, (glacier_name, glacier_data) in enumerate(GLACIERS_sorted.items()):
         # Read files
         glacier_full_name = glacier_data['full_name']
         df_outlines = pd.read_csv(glacier_data['outlines_file'], sep="\s+", header=None)
@@ -236,7 +235,6 @@ def plot_friction_laws(m=3):
             # RAW DATA
             try:
                 date, vel, tau = compile_vel_tau_timeseries(glacier_key, stake, m)
-                
                 if vel is None or tau is None or len(vel) == 0 or len(tau) == 0:
                     print(f"No data for {glacier_key}-{stake}")
                     continue
@@ -253,7 +251,7 @@ def plot_friction_laws(m=3):
                 continue
 
             # FIT DATA
-            if glacier_key not in ["Geb", "StSo"]:
+            if glacier_key not in ["StSo"]:
                 fit_file = proc_data_dir / f"mw{1/m:.3f}" / "friction_fits" / f"{glacier_key}_{stake}_friclaw_ts.csv"
                 if not Path(fit_file).exists():
                     print(f"Missing fit file {glacier_key}-{stake}")
@@ -269,7 +267,7 @@ def plot_friction_laws(m=3):
             #     ax1.axhline(y=CN_value, color=color, linestyle='--')
 
             # NORMALIZED
-            if (glacier_key == "Geb") or (glacier_key == "StSo"):
+            if glacier_key in ["Geb", "StSo"]:
                 continue
 
             try:
@@ -294,7 +292,8 @@ def plot_friction_laws(m=3):
     ax1.set_ylabel(r'Basal shear stress (MPa)')
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    ax1.set_ylim(0.02, 0.17)
+    ax1.set_xlim(0.8, 200)
+    ax1.set_ylim(0.012, 0.17)
     ax1.set_xticks([x for x in x_ticks if ax1.get_xlim()[0] <= x <= ax1.get_xlim()[-1]])
     ax1.set_yticks([y for y in y_ticks if ax1.get_ylim()[0] <= y <= ax1.get_ylim()[-1]])
 
@@ -338,22 +337,25 @@ def plot_CN_vs_slope(mw=3):
 
     for glacier_key, glacier_data in GLACIERS.items():
         
-        if glacier_key in ["Geb"]:   # ignoring soft-bedd and bad constrained glaciers
+        if glacier_key in ["Geb", "StSo"]:   # ignoring soft-bedd and bad constrained glaciers
             continue
 
-        slope_data = glacier_data['slope_60_80']
+        for stake in glacier_data['xy_coords'].keys():
 
-        for stake, slope_deg in slope_data.items():
+            df_slopes = pd.read_csv(geom_data_dir / 'slopes/mean_slopes.csv', sep=",")
+            row = df_slopes[(df_slopes['glacier'] == glacier_key) & (df_slopes['stake'] == stake)]
+            slope_deg = row['mean_slope_deg_6080'].values
 
             if stake == "Wheel":
                 CN = 0.217
+            
             else:
                 params = get_friclaw_params(glacier_key, stake, mw=mw)
                 if params is None:
                     print(f"  [SKIP] {glacier_key} {stake} : pas de params")
                     continue
                 CN = params[0]
-
+            
             slopes_deg.append(slope_deg[0])
             CN_values.append(CN)
 
@@ -622,7 +624,8 @@ def plot_spatial_friction_law(start_year=2000, nb_years=10, m=3):
     ax.set_ylabel(r'Basal shear stress (MPa)')
     ax.set_xscale('log')
     ax.set_yscale('log')
-    # ax.set_ylim(0.01, 0.17)
+    ax.set_xlim(2, 200)
+    ax.set_ylim(0.04, 0.17)
     ax.set_xticks([x for x in x_ticks if ax.get_xlim()[0] <= x <= ax.get_xlim()[-1]])
     ax.set_yticks([y for y in y_ticks if ax.get_ylim()[0] <= y <= ax.get_ylim()[-1]])
 
@@ -639,17 +642,17 @@ def plot_spatial_friction_law(start_year=2000, nb_years=10, m=3):
 
 
 if __name__ == "__main__":
-    # plot_surface_vel_timeseries()
-    # plot_thk_changes_timeseries()
-    # plot_glaciers_longit_cs()
+    plot_surface_vel_timeseries()
+    plot_thk_changes_timeseries()
+    plot_glaciers_longit_cs()
     plot_friction_laws(1)
     plot_friction_laws(3)
     plot_friction_laws(6)
-    # plot_CN_vs_slope(1)
-    # plot_CN_vs_slope(3)
-    # plot_CN_vs_slope(6)    
-    # plot_uncertainties()
-    # plot_spatial_friction_law()
+    plot_CN_vs_slope(1)
+    plot_CN_vs_slope(3)
+    plot_CN_vs_slope(6)    
+    plot_uncertainties()
+    plot_spatial_friction_law()
 
     for glacier_key, glacier_data in GLACIERS.items():
         for stake in glacier_data['xy_coords'].keys():
@@ -659,3 +662,15 @@ if __name__ == "__main__":
                 continue
             CN_value, q_value, As_value, m_value = result
             print(f"{glacier_key} {stake}  CN = {CN_value:.2f}  As = {round(As_value, -2):.0f}")
+
+            df = pd.read_csv(proc_data_dir / f"mw{1/3:.3f}" / f"{glacier_key}_all_data_{stake}.csv")
+
+            # valid = df.dropna(subset=["slope"])
+            # years_full = np.arange(valid["date"].iloc[0], valid["date"].iloc[-1] + 1)
+            # slopes_full = np.degrees(np.arctan(np.interp(years_full, valid["date"], valid["slope"])))
+            # mean_slope = slopes_full[(years_full >= 1960) & (years_full <= 1980)].mean()
+
+            # valid = df.dropna(subset=["altitude"])
+            # years_full = np.arange(valid["date"].iloc[0], valid["date"].iloc[-1] + 1)
+            # alt_full = np.interp(years_full, valid["date"], valid["altitude"])
+            # print(f"slope : {np.round(np.degrees(np.arctan(df['slope'])).mean(), 2)}, altitude : {np.round(alt_full.mean(), 0)}")

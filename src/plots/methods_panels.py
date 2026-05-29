@@ -5,7 +5,7 @@ from pathlib import Path
 src_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(src_dir))
 
-from utils import GLACIERS, fig_dir, get_friclaw_params
+from utils import GLACIERS, fig_dir, get_friclaw_params, plot_specs
 from friction_laws import *
 from run_friction_fits import *
 import numpy as np
@@ -13,32 +13,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-plot_specs = [
-    ("All", "101", 6, 1),
-    ("Arg", "4", 0, 0),
-    ("Arg", "5", 0, 1),
-    ("Cor", "B4", 1, 0),
-    ("Cor", "A4", 1, 1),
-    ("Geb", "sup", 2, 0),
-    ("Geb", "ss", 2, 1),
-    ("Gie", "5", 3, 0),
-    ("Gie", "102", 3, 1),
-    ("GB", "inf", 4, 0),
-    ("GB", "sup", 4, 1),
-    ("MDG", "tac", 5, 0),
-    ("MDG", "trel", 5, 1),
-    ("MDG", "ech", 6, 0),
-    ("StSo", "B", 7, 0),
-    ("StSo", "C", 7, 1),
-]
-
-
 def plot_reglin_taub_thk(m=3):
 
     def plot_panel_left(ax, df, color, title, transform="thk"):
         if df is None or len(df) == 0:
             return
-        x = df["thick_elmer"] * df["slope"] if transform == "thk_slope" else df["thick_elmer"]
+        x = df["thickness"] * df["slope"] if transform == "thk_slope" else df["thickness"]
         y = df["tau_b_elmer"]
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
@@ -66,7 +46,11 @@ def plot_reglin_taub_thk(m=3):
                    color=color, marker='o', s=30, label='Elmer')
         mask_obs = np.isfinite(df["date"]) & np.isfinite(df["obs_tau_b"])
         df_obs = df[mask_obs].sort_values("date")
-        ax.plot(df_obs["date"], df_obs["obs_tau_b"],
+        if glacier=="StSo":
+            ax.plot(df_obs["date"], df_obs["obs_tau_b_reglin"],
+                '--', linewidth=1.2, color=color)
+        else:
+            ax.plot(df_obs["date"], df_obs["obs_tau_b"],
                 '--', linewidth=1.2, color=color)
         ax.set_title('')
         ax.text(0.97, 0.03, title,
@@ -108,18 +92,10 @@ def plot_reglin_taub_thk(m=3):
         trans = "thk_slope" if glacier == "GB" else "thk"
 
         plot_panel_left(axes_left[r, c], df, color, title, trans)
-        # if glacier == "GB":
-        #     axes_left[r, c].set_xlabel("Thickness × Slope (m)", fontsize=12)
+        if glacier == "GB":
+            axes_left[r, c].set_xlabel("Thickness × Slope (m)", fontsize=12)
 
         plot_panel_right(axes_right[r, c], df, color, title)
-
-    # cacher axes vides
-    for ax in axes_left.ravel():
-        if not ax.has_data():
-            ax.set_visible(False)
-    for ax in axes_right.ravel():
-        if not ax.has_data():
-            ax.set_visible(False)
 
     # labels des panels — y=0.0 colle au bas de la subfigure
     sf_left.supxlabel('Thickness (m)', fontsize=28, y=0.01, fontweight='bold')
@@ -144,7 +120,7 @@ def plot_reglin_udef_thk4(m=3):
     def plot_panel_left(ax, df, color, title, transform="thk"):
         if df is None or len(df) == 0:
             return
-        x = df["thick_elmer"]**4 * df["slope"]**3 if transform == "thk_slope" else df["thick_elmer"]**4
+        x = df["thickness"]**4 * df["slope"]**3 if transform == "thk_slope" else df["thickness"]**4
         y = df["u_def_elmer"]
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
@@ -172,7 +148,11 @@ def plot_reglin_udef_thk4(m=3):
                    color=color, marker='o', s=30, label='Elmer')
         mask_obs = np.isfinite(df["date"]) & np.isfinite(df["obs_u_def"])
         df_obs = df[mask_obs].sort_values("date")
-        ax.plot(df_obs["date"], df_obs["obs_u_def"],
+        if glacier=="StSo":
+            ax.plot(df_obs["date"], df_obs["obs_u_def_reglin"],
+                '--', linewidth=1.2, color=color)
+        else:
+            ax.plot(df_obs["date"], df_obs["obs_u_def"],
                 '--', linewidth=1.2, color=color)
         ax.set_title('')
         ax.text(0.97, 0.97, title,
@@ -214,8 +194,8 @@ def plot_reglin_udef_thk4(m=3):
         trans = "thk_slope" if glacier == "GB" else "thk"
 
         plot_panel_left(axes_left[r, c], df, color, title, trans)
-        # if glacier == "GB":
-        #     axes_left[r, c].set_xlabel(fr"Thickness$^4$ * Slope$^3$", fontsize=12)
+        if glacier == "GB":
+            axes_left[r, c].set_xlabel(fr"Thickness$^4$ * Slope$^3$", fontsize=12)
 
         plot_panel_right(axes_right[r, c], df, color, title)
 
@@ -243,7 +223,7 @@ def plot_reglin_udef_thk4(m=3):
 
 
 
-def plot_all_stakes_reglin_thk_taub(m=3):
+def plot_all_stakes_reglin_thk_slope_taub(m=3):
 
     def plot_panel(ax, df, color, title):
         x = df["thickness"] * df["slope"]
@@ -301,13 +281,13 @@ def plot_all_stakes_reglin_thk_taub(m=3):
     for ax in axes_flat[n:]:
         ax.set_visible(False)
 
-    fig.supxlabel("Thickness (m)", fontsize=26, y=0.01, fontweight = "bold")
+    fig.supxlabel(r"Thickness $\times$ Slope", fontsize=26, y=0.01, fontweight = "bold")
     fig.supylabel("Basal shear stress — Elmer (MPa)", fontsize=26, fontweight = "bold")
 
-    fig.savefig(fig_dir / f"reglin_all_taub_elmer_thk_m{m}.pdf",
+    fig.savefig(fig_dir / f"reglin_all_taub_elmer_thk_slope_m{m}.pdf",
                 dpi=200, bbox_inches='tight')
     plt.close(fig)
-    print("plot_all_stakes_reglin_thk_taub saved")
+    print("plot_all_stakes_reglin_thk_slope_taub saved")
 
 
 def plot_thick_elmer_vs_obs(m=3):
@@ -367,14 +347,9 @@ def plot_thick_elmer_vs_obs(m=3):
 
 
 if __name__ == "__main__":
-    plot_reglin_taub_thk(1)
-    plot_reglin_udef_thk4(1)
-    
+   
     plot_reglin_taub_thk(3)
     plot_reglin_udef_thk4(3)
 
-    plot_reglin_taub_thk(6)
-    plot_reglin_udef_thk4(6)
-
-    plot_all_stakes_reglin_thk_taub()
+    plot_all_stakes_reglin_thk_slope_taub()
     plot_thick_elmer_vs_obs()
