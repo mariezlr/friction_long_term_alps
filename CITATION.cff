@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this code or data, please cite the associated article."
+title: "Code and processed data for: Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers"
+version: 1.0.0
+doi: 10.5281/zenodo.XXXXXXX
+license: MIT
+repository-code: "https://github.com/mariezlr/friction_long_term_alps"
+authors:
+  - family-names: Zeller
+    given-names: Marie
+    affiliation: "Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, IGE, Grenoble, France"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: Gilbert
+    given-names: Adrien
+    affiliation: "Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, IGE, Grenoble, France"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: Gimbert
+    given-names: Florent
+    affiliation: "Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, IGE, Grenoble, France"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+preferred-citation:
+  type: article
+  title: "Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers"
+  authors:
+    - family-names: Zeller
+      given-names: Marie
+    - family-names: Gilbert
+      given-names: Adrien
+    - family-names: Gimbert
+      given-names: Florent
+  journal: "Journal name"
+  year: 2026
+  doi: 10.XXXX/XXXXX

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-Workflow:
-1. Lit les sorties Elmer aux dates DEM
-2. Lit les observations in-situ (altitude, vitesse)
-3. Établit relations empiriques τ_b ~ H et u_def ~ H^4
-4. Interpole sur toutes les dates d'observation
-5. Calcule u_bed = u_surf - u_def
-6. Sauvegarde CSV final
+Build basal shear stress and sliding velocity timeseries at each stake.
 
-Output: glacier_all_data_stake.csv avec colonnes:
-    date, u_bed_elmer, u_surf_elmer, tau_d_elmer, tau_b_elmer, 
-    sigma_elmer, u_def_elmer, slope, ..., 
+Workflow:
+1. Read Elmer/Ice outputs at DEM dates and average them around each stake.
+2. Read in-situ observations (surface elevation and velocity).
+3. Fit empirical relationships tau_b ~ H and u_def ~ H^4 at DEM dates.
+4. Apply these relationships to all observation dates.
+5. Compute basal sliding velocity u_bed = u_surf - u_def.
+6. Save the final timeseries as CSV.
+
+Output: {glacier}_all_data_{stake}.csv with columns:
+    date, u_bed_elmer, u_surf_elmer, tau_d_elmer, tau_b_elmer,
+    sigma_elmer, u_def_elmer, slope, ...,
     altitude, velocity, thickness, obs_tau_b, obs_u_def, obs_u_bed
 """
 from utils import GLACIERS, geom_data_dir, proc_data_dir
@@ -23,32 +25,31 @@ import re
 script_dir = Path(__file__).resolve().parent
 
 # ============================================================================
-# LECTURE DES SORTIES ELMER
+# ELMER/ICE OUTPUTS
 # ============================================================================
 
 def read_elmer_data_file(glacier_name, year, m, C, Arg_simu=None):
     """
-    Lit le fichier Elmer_data_{year}.dat pré-calculé.
+    Read the Elmer/Ice output file for a given glacier and year.
 
+    If Arg_simu is given, read the corresponding sensitivity experiment
+    for Argentière (data/uncertainties/{Arg_simu}/).
     """
-    # Essayer de lire le fichier pré-calculé
     if Arg_simu is not None:
         elmer_file = script_dir / '..' / 'data' / 'uncertainties' / f'{Arg_simu}' / f"Arg_{Arg_simu}_{year}.csv"
     else:
-        # m, C = GLACIERS[f'{glacier_name}']['mval_Cval'][m_index]
-        elmer_file = script_dir / '..' / 'data'/ 'elmer_raw' / f'mw{m:.0f}' / f'{glacier_name}_{year}.csv'
-
+        elmer_file = script_dir / '..' / 'data' / 'elmer_raw' / f'mw{m:.0f}' / f'{glacier_name}_{year}.csv'
 
     if not elmer_file.exists():
         print(f"[WARNING] missing Elmer file: {glacier_name} {year}")
         return pd.DataFrame()
-    
+
     try:
         df = pd.read_csv(elmer_file)
     except Exception as e:
         print(f"[WARNING] error reading {elmer_file}: {e}")
         return pd.DataFrame()
-    
+
     if df.empty:
         print(f"[WARNING] empty file: {glacier_name} {year}")
         return pd.DataFrame()
@@ -57,123 +58,126 @@ def read_elmer_data_file(glacier_name, year, m, C, Arg_simu=None):
 
 
 # ============================================================================
-# CALCULS DE FRICTION
+# STRESS CALCULATIONS
 # ============================================================================
 
 def calc_tau_b(u_bed, C, m=3):
-    """Calcule τ_b avec loi de Weertman."""
+    """Basal shear stress from the Weertman friction law used in Elmer/Ice."""
     return C * (u_bed ** (1/m))
 
 
-def calc_tau_d(thickness, xgrad, ygrad, zgrad):
-    """Calcule driving stress τ_d = ρ*g*H*sin(α)."""
-    norm_grad = np.sqrt(xgrad**2 + ygrad**2)
-    slope = np.where(norm_grad != 0, zgrad / norm_grad, 0)
-    angle = np.arctan(slope)
+def calc_tau_d(thickness, xgrad, ygrad):
+    """Driving stress tau_d = rho * g * H * sin(alpha), in MPa."""
+    angle = np.arctan(np.sqrt(xgrad**2 + ygrad**2))
     return 1e-6 * 917 * 9.81 * thickness * np.sin(angle)
 
 
 # ============================================================================
-# MOYENNAGE SPATIAL
+# SPATIAL AVERAGING
 # ============================================================================
 
-def average_in_radius(glacier_name, stake_name, df, x0, y0, radius, m, C, Hmin=20):
+def average_in_radius(glacier_name, stake_name, df, x0, y0, radius, m, C, Hmin=20, spatial_as=False):
     """
-    Calcule les variables moyennées dans un rayon autour d'un point.
-    
+    Average Elmer/Ice outputs within a circle around a stake.
+
     Parameters
     ----------
+    glacier_name, stake_name : str
+        Glacier and stake identifiers.
+    df : pd.DataFrame
+        Elmer/Ice nodal outputs for one date.
     x0, y0 : float
-        Coordonnées du centre
+        Stake coordinates [m].
     radius : float
-        Rayon de moyennage [m]
-    C : float
-        Coefficient de friction
-    m : float
-        Exposant
+        Averaging radius [m].
+    m, C : float
+        Exponent and coefficient of the Weertman law used in Elmer/Ice.
     Hmin : float
-        Épaisseur minimale [m]
-        
+        Minimum ice thickness [m].
+    spatial_as : bool
+        If True, use the spatially variable friction coefficient (column 'cw').
+
     Returns
     -------
-    dict
-        Variables moyennées
+    dict or None
+        Averaged variables, or None if no node lies within the circle.
     """
-    # Calculer distances
     df['distance'] = np.sqrt((df['xcoord'] - x0)**2 + (df['ycoord'] - y0)**2)
-    
-    # Sélectionner voisinage
+
     mask = (df['distance'] <= radius) & (df['thicksurf'] >= Hmin)
-    voisinage = df[mask].copy()
-    
-    if len(voisinage) == 0:
+    neighbourhood = df[mask].copy()
+
+    if len(neighbourhood) == 0:
         return None
-    
-    # Voisinage proche pour la pente
-    mask_proche = (df['distance'] <= 50) & (df['thicksurf'] >= Hmin)
-    voisinage_proche = df[mask_proche].copy()
-    
-    # Calculs de pente
-    slopex = -voisinage['xgrad'].mean(skipna=True)
-    slopey = -voisinage['ygrad'].mean(skipna=True)
-    
-    voisinage['zgrad_dirmean'] = (slopex * voisinage['xgrad'] + 
-                                  slopey * voisinage['ygrad'])
-    slopez = voisinage['zgrad_dirmean'].mean(skipna=True)
+
+    # Close neighbourhood used for the local slope
+    mask_close = (df['distance'] <= 50) & (df['thicksurf'] >= Hmin)
+    neighbourhood_close = df[mask_close].copy()
+
+    # Mean flow direction
+    slopex = -neighbourhood['xgrad'].mean(skipna=True)
+    slopey = -neighbourhood['ygrad'].mean(skipna=True)
+
+    neighbourhood['zgrad_dirmean'] = (slopex * neighbourhood['xgrad'] +
+                                      slopey * neighbourhood['ygrad'])
+    slopez = neighbourhood['zgrad_dirmean'].mean(skipna=True)
     normslope = np.sqrt(slopex**2 + slopey**2 + slopez**2)
-    
+
     if normslope == 0:
         normslope = 1e-9
-    
-    # Projection du vecteur normal
-    voisinage['projvector'] = (
-        (slopex / normslope) * voisinage['normalbed1'] +
-        (slopey / normslope) * voisinage['normalbed2'] +
-        (slopez / normslope) * voisinage['normalbed3']
+
+    # Projection of the bed normal onto the mean flow direction
+    neighbourhood['projvector'] = (
+        (slopex / normslope) * neighbourhood['normalbed1'] +
+        (slopey / normslope) * neighbourhood['normalbed2'] +
+        (slopez / normslope) * neighbourhood['normalbed3']
     )
-    
-    # Moyennes pondérées par surface
-    total_area = voisinage['nodearea'].sum(skipna=True)
-    
+
+    # Area-weighted averages
+    total_area = neighbourhood['nodearea'].sum(skipna=True)
+
     if total_area == 0:
         return None
-    
-    vel_h_bed = voisinage['vel_h_bed'].mean(skipna=True)
-    vel_h_surf = voisinage['vel_h_surf'].mean(skipna=True)
-    thick_elmer = voisinage['thicksurf'].mean(skipna=True)
-    
-    sigma = (voisinage['normalstress'] * voisinage['projvector'] * 
-             voisinage['nodearea']).sum(skipna=True) / total_area
-    
+
+    vel_h_bed = neighbourhood['vel_h_bed'].mean(skipna=True)
+    vel_h_surf = neighbourhood['vel_h_surf'].mean(skipna=True)
+    thick_elmer = neighbourhood['thicksurf'].mean(skipna=True)
+
+    sigma = (neighbourhood['normalstress'] * neighbourhood['projvector'] *
+             neighbourhood['nodearea']).sum(skipna=True) / total_area
+
     # Driving stress
-    voisinage['tau_d'] = calc_tau_d(
-        voisinage['thicksurf'], 
-        voisinage['xgrad'], 
-        voisinage['ygrad'],
-        voisinage['xgrad']**2 + voisinage['ygrad']**2
+    neighbourhood['tau_d'] = calc_tau_d(
+        neighbourhood['thicksurf'],
+        neighbourhood['xgrad'],
+        neighbourhood['ygrad'],
     )
-    tau_d = (voisinage['tau_d'] * voisinage['nodearea']).sum(skipna=True) / total_area
-    
-    # Basal stress
-    # m, C = GLACIERS[glacier_name]['mval_Cval'][m_index]
-    voisinage['tau_b'] = calc_tau_b(voisinage['vel_h_bed'], C, m)
-    tau_b = (voisinage['tau_b'] * voisinage['nodearea']).sum(skipna=True) / total_area
-    
-    # Pentes
+    tau_d = (neighbourhood['tau_d'] * neighbourhood['nodearea']).sum(skipna=True) / total_area
+
+    # Basal shear stress
+    if spatial_as:
+        neighbourhood['tau_b'] = calc_tau_b(neighbourhood['vel_h_bed'], neighbourhood['cw'], m)
+    else:
+        neighbourhood['tau_b'] = calc_tau_b(neighbourhood['vel_h_bed'], C, m)
+
+    tau_b = (neighbourhood['tau_b'] * neighbourhood['nodearea']).sum(skipna=True) / total_area
+
+    # Surface slopes
     slope = np.sqrt(
-        voisinage_proche['xgrad']**2 + voisinage_proche['ygrad']**2
+        neighbourhood_close['xgrad']**2 + neighbourhood_close['ygrad']**2
     ).mean(skipna=True)
-    
+
     averaged_slope = np.sqrt(
-        voisinage['xgrad']**2 + voisinage['ygrad']**2
+        neighbourhood['xgrad']**2 + neighbourhood['ygrad']**2
     ).mean(skipna=True)
-    
+
     df_slopes = pd.read_csv(geom_data_dir / 'slopes/mean_slopes.csv', sep=",")
     row = df_slopes[(df_slopes['glacier'] == glacier_name) & (df_slopes['stake'] == stake_name)]
     slope_rad = row['mean_slope_rad_full'].values[0]
     slope_dem = np.tan(slope_rad)
+
     return {
-        'thick_elmer' : thick_elmer,
+        'thick_elmer': thick_elmer,
         'u_bed_elmer': vel_h_bed,
         'u_surf_elmer': vel_h_surf,
         'tau_d_elmer': tau_d,
@@ -186,235 +190,222 @@ def average_in_radius(glacier_name, stake_name, df, x0, y0, radius, m, C, Hmin=2
         'gradxmean': slopex,
         'gradymean': slopey,
         'gradzmean': slopez,
-        'normalstress': voisinage['normalstress'].mean(skipna=True),
-        'projvector': voisinage['projvector'].mean(skipna=True)
+        'normalstress': neighbourhood['normalstress'].mean(skipna=True),
+        'projvector': neighbourhood['projvector'].mean(skipna=True)
     }
 
 
-def process_elmer_timeseries(glacier_name, stake_name, years_DEM, x0, y0, radius, m, C, Hmin=20, Arg_simu=None):
+def process_elmer_timeseries(glacier_name, stake_name, years_DEM, x0, y0, radius, m, C,
+                             Hmin=20, Arg_simu=None, spatial_as=False):
     """
-    Traite toutes les années Elmer pour un stake.
-    
+    Build the Elmer/Ice timeseries at a stake over all DEM dates.
+
     Parameters
     ----------
     years_DEM : list
-        Années avec DEM
+        Years with an available surface DEM.
     x0, y0 : float
-        Coordonnées du stake
+        Stake coordinates [m].
     radius : float
-        Rayon de moyennage [m]
-    m_index : int
-        Indice des valeurs (C,m) pour Weertman
+        Averaging radius [m].
+    m, C : float
+        Exponent and coefficient of the Weertman law used in Elmer/Ice.
     Hmin : float
-        Épaisseur minimale [m]
-        
+        Minimum ice thickness [m].
+    Arg_simu : str, optional
+        Name of an Argentière sensitivity experiment.
+    spatial_as : bool
+        If True, use the spatially variable friction coefficient.
+
     Returns
     -------
-    df : pd.DataFrame
-        Série temporelle Elmer
+    pd.DataFrame
+        One row per DEM date.
     """
     records = []
-    
+
     for year in years_DEM:
-        # Lire données Elmer
         df_elmer = read_elmer_data_file(glacier_name, year, m, C, Arg_simu=Arg_simu)
-        
+
         if df_elmer.empty:
             continue
-        
-        # Moyenner dans rayon
-        result = average_in_radius(glacier_name, stake_name, df_elmer, x0, y0, radius, m, C, Hmin)
-        
+
+        result = average_in_radius(glacier_name, stake_name, df_elmer, x0, y0, radius,
+                                   m, C, Hmin, spatial_as=spatial_as)
+
         if result is None:
             continue
-        
+
         result['date'] = year
         result['sigma_plus_tau_b'] = result['sigma_elmer'] + result['tau_b_elmer']
-        
+
         records.append(result)
-    
+
     if len(records) == 0:
         return pd.DataFrame()
-    
+
     df = pd.DataFrame(records)
     df = df.sort_values('date').reset_index(drop=True)
-    
+
     return df
 
 
 # ============================================================================
-# LECTURE DES OBSERVATIONS
+# OBSERVATIONS
 # ============================================================================
 
 def read_observations(glacier_name, stake_name):
     """
-    Lit les observations in-situ (altitude, vitesse).
-    
-    Parameters
-    ----------
-    glacier_name : str
-        Nom du glacier
-    stake_name : str
-        Nom du stake
-        
+    Read in-situ observations of surface elevation and velocity at a stake.
+
     Returns
     -------
     dict
-        Dictionnaire avec 'altitude', 'velocity', 'thickness' DataFrames
+        Keys 'altitude' and 'velocity', each a DataFrame with a 'date' column.
     """
     obs = {}
-    
-    # Altitude
+
     alt_file = script_dir / '..' / 'data' / 'obs_raw' / f'{glacier_name}_alt_{stake_name}.csv'
     if alt_file.exists():
         df = pd.read_csv(alt_file)
-        # Renommer colonnes si nécessaire
         if 'year' in df.columns and 'date' not in df.columns:
             df = df.rename(columns={'year': 'date'})
         obs['altitude'] = df
-    
-    # Vitesse
+
     vel_file = script_dir / '..' / 'data' / 'obs_raw' / f'{glacier_name}_vel_{stake_name}.csv'
     if vel_file.exists():
         df = pd.read_csv(vel_file)
         if 'year' in df.columns and 'date' not in df.columns:
             df = df.rename(columns={'year': 'date'})
         obs['velocity'] = df
-    
+
     return obs
 
+
 def interp_zdem(mnt_bed, xx, yy):
-    # Charger les données du lit rocheux
-    
-    # Extraire les colonnes x, y, z
+    """Interpolate the bedrock elevation at (xx, yy)."""
     x = mnt_bed.iloc[:, 0].values
     y = mnt_bed.iloc[:, 1].values
     z = mnt_bed.iloc[:, 2].values
 
-    # Utiliser griddata pour l'interpolation
     zi = griddata((x, y), z, (xx, yy), method='linear')
-    
+
     return round(float(zi), 2)
 
+
 # ============================================================================
-# INTERPOLATION TEMPORELLE
+# EMPIRICAL RELATIONSHIPS
 # ============================================================================
 
 def fit_empirical_relation(x_obs, y_elmer, degree=1):
     """
-    Ajuste une relation empirique entre observations et Elmer.
-    
-    Parameters
-    ----------
-    x_obs : array
-        Variable observée (ex: thickness)
-    y_elmer : array
-        Variable Elmer (ex: tau_b)
-    degree : int
-        Degré du polynôme
-        
+    Fit a polynomial relationship between an observed variable and an
+    Elmer/Ice output (e.g. tau_b as a function of thickness).
+
     Returns
     -------
-    coeffs : array
-        Coefficients du polynôme
+    np.ndarray or None
+        Polynomial coefficients, or None if there are not enough points.
     """
-    # Retirer NaN
     mask = ~np.isnan(x_obs) & ~np.isnan(y_elmer)
-    
+
     if mask.sum() < degree + 1:
         return None
-    
-    x_clean = x_obs[mask]
-    y_clean = y_elmer[mask]
-    
-    # Ajuster
-    coeffs = np.polyfit(x_clean, y_clean, degree)
-    
+
+    coeffs = np.polyfit(x_obs[mask], y_elmer[mask], degree)
+
     return coeffs
 
 
 def apply_empirical_relation(x_continuous, coeffs):
-    """Applique la relation empirique."""
+    """Apply a fitted polynomial relationship."""
     if coeffs is None:
         return np.full_like(x_continuous, np.nan)
-    
+
     poly = np.poly1d(coeffs)
     return poly(x_continuous)
 
 
 # ============================================================================
-# FONCTION PRINCIPALE
+# MAIN PROCESSING
 # ============================================================================
 
-def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None, output_file=None):
+def process_glacier_stake(glacier_name, stake_name, config, m, C,
+                          Arg_simu=None, output_file=None, spatial_as=False):
     """
-    Traite un glacier/stake complet.
+    Build and save the full timeseries for one stake.
+
+    Parameters
+    ----------
+    glacier_name, stake_name : str
+        Glacier and stake identifiers.
+    config : dict
+        Glacier entry of the GLACIERS dictionary.
+    m, C : float
+        Exponent and coefficient of the Weertman law used in Elmer/Ice.
+    Arg_simu : str, optional
+        Name of an Argentière sensitivity experiment.
+    output_file : Path, optional
+        Output path. Defaults to processed_timeseries/mw{1/m}/{glacier}_all_data_{stake}.csv.
+    spatial_as : bool
+        If True, use the spatially variable friction coefficient.
+
+    Returns
+    -------
+    pd.DataFrame or None
     """
-    print(f"\n{'='*60}")
-    print(f"Traitement: {glacier_name} - {stake_name}")
-    print(f"{'='*60}")
+    print(f"\nProcessing {glacier_name} - {stake_name}")
 
     years_DEM = config['years_DEM']
     x0, y0 = config['xy_coords'][stake_name]
-    Hmin = 20  # ou config['Hmin'][stake_name] si ajout plus tard
+    Hmin = 20
     radius = config['avg_dist'][stake_name]
-    
-    print(f"  Coordonnées: ({x0}, {y0})")
-    print(f"  Rayon moyennage: {radius} m")
-    print(f"  Friction: C={C}, m={m}")
-    
-    # 1. Traiter données Elmer
-    print("\n→ Traitement données Elmer...")
+
+    print(f"  Coordinates: ({x0}, {y0}), averaging radius: {radius} m, C={C}, m={m}")
+
+    # 1. Elmer/Ice outputs
     df_elmer = process_elmer_timeseries(
-        glacier_name, stake_name, years_DEM, x0, y0, radius, m, C, Hmin, Arg_simu=Arg_simu
+        glacier_name, stake_name, years_DEM, x0, y0, radius, m, C, Hmin,
+        Arg_simu=Arg_simu, spatial_as=spatial_as
     )
-    print(f"  ✓ {len(df_elmer)} dates Elmer")
-    
-    # 2. Lire observations
-    print("\n→ Lecture observations...")
+    print(f"  {len(df_elmer)} Elmer/Ice dates")
+
+    # 2. Observations
     obs = read_observations(glacier_name, stake_name)
-    
+
     df_altitude = obs.get('altitude', pd.DataFrame())
     df_velocity = obs.get('velocity', pd.DataFrame())
-    
-    print(f"  ✓ {len(df_altitude)} obs altitude")
-    print(f"  ✓ {len(df_velocity)} obs vitesse")
-    
-    # 3. Fusionner Elmer + observations aux dates DEM
-    print("\n→ Fusion Elmer + observations...")
-    
-    # Créer DataFrame avec observations continues
+
+    print(f"  {len(df_altitude)} elevation and {len(df_velocity)} velocity observations")
+
+    # 3. Merge Elmer/Ice outputs and observations at DEM dates
     if not df_velocity.empty:
         df_obs = df_velocity.copy()
         col = [c for c in df_obs.columns if c != 'date'][0]
         df_obs = df_obs.rename(columns={col: 'velocity'})
     else:
         df_obs = pd.DataFrame()
-    
+
     if not df_altitude.empty:
         df_alt = df_altitude.copy()
         col = [c for c in df_alt.columns if c != 'date'][0]
         df_alt = df_alt.rename(columns={col: 'altitude'})
-        
+
         df_obs = pd.merge(df_obs, df_alt, on='date', how='outer')
-    
-    # Calculer thickness si disponible
+
+    # Ice thickness from observed surface elevation and bedrock DEM
     if 'altitude' in df_obs.columns:
         mnt_bed_path = geom_data_dir / 'bedrocks' / f'DEM_bedrock_{glacier_name}.dat'
         mnt_bed = pd.read_csv(mnt_bed_path, delimiter=r'\s+', header=None)
         zbedrock = interp_zdem(mnt_bed, x0, y0)
         df_obs['thickness'] = df_obs['altitude'] - zbedrock
-    
-    # Fusionner avec Elmer aux dates DEM
-    print(df_elmer.columns)
-    print(df_obs.columns)
 
     df_elmer = df_elmer.sort_values("date")
-    df_obs   = df_obs.sort_values("date")
+    df_obs = df_obs.sort_values("date")
     df_elmer["date"] = df_elmer["date"].astype(float)
-    df_obs["date"]   = df_obs["date"].astype(float)
+    df_obs["date"] = df_obs["date"].astype(float)
 
-    # Initialiser df_merged_dem avec le merge_asof complet
+    # Match each DEM date with the nearest observation date (within 4 years)
     df_merged_dem = pd.merge_asof(
         df_elmer,
         df_obs,
@@ -423,18 +414,7 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
         tolerance=4
     )
 
-    # Vérifier quelle date obs a été matchée
-    df_check = pd.merge_asof(
-        df_elmer[['date']],
-        df_obs[['date']].rename(columns={'date': 'date_obs_matched'}),
-        left_on='date',
-        right_on='date_obs_matched',
-        direction='nearest',
-        tolerance=4
-    )
-    print(df_check.to_string())
-
-    # Combler les NaN colonne par colonne avec la date la plus proche (ignore NaN dans df_obs)
+    # Fill missing values column by column with the nearest available observation
     cols_obs = ['velocity', 'altitude', 'thickness']
     for col in cols_obs:
         if col not in df_obs.columns:
@@ -450,88 +430,80 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
         df_merged_dem[col] = df_merged_dem[col].fillna(df_merged_dem[f'{col}_fill'])
         df_merged_dem.drop(columns=f'{col}_fill', inplace=True)
 
-    # Mettre date en premier
     cols = ['date'] + [col for col in df_merged_dem.columns if col != 'date']
     df_merged_dem = df_merged_dem[cols]
-    
-    print(f"  ✓ {len(df_merged_dem)} dates avec Elmer ET observations")
-    
+
+    print(f"  {len(df_merged_dem)} dates with both Elmer/Ice outputs and observations")
+
     if len(df_merged_dem) < 3:
-        print("  ✗ Pas assez de points pour ajuster les relations")
+        print("  Not enough points to fit the empirical relationships")
         return None
-    
-    # 4. Ajuster relations empiriques
-    print("\n→ Ajustement relations empiriques...")
-    
-    if glacier_name == "GB": # Exception glacier blanc où on utilise la pente
-        # τ_b ~ H \times slope
+
+    # 4. Fit empirical relationships
+    if glacier_name == "GB":
+        # Glacier Blanc: relationships also depend on surface slope
+        # tau_b ~ H * slope
         HS = (df_merged_dem['thickness'].values) * (np.arctan(df_merged_dem['slope']).values)
         coeffs_tau = fit_empirical_relation(
             HS, df_merged_dem['tau_b_elmer'].values, degree=1)
-        
-        # u_def ~ H^4 \times slope^3
+
+        # u_def ~ H^4 * slope^3
         H4S3 = (df_merged_dem['thickness'].values ** 4) * (np.arctan(df_merged_dem['slope']).values ** 3)
         coeffs_udef = fit_empirical_relation(
             H4S3, df_merged_dem['u_def_elmer'].values, degree=1)
-    
+
     else:
-        # τ_b ~ H (linéaire)
+        # tau_b ~ H
         coeffs_tau = fit_empirical_relation(
             df_merged_dem['thickness'].values,
             df_merged_dem['tau_b_elmer'].values, degree=1)
-        
-        # u_def ~ H^4 (linéaire en H^4)
+
+        # u_def ~ H^4
         H4 = df_merged_dem['thickness'].values ** 4
         coeffs_udef = fit_empirical_relation(
             H4, df_merged_dem['u_def_elmer'].values, degree=1)
 
         if coeffs_tau is not None:
-            print(f"  ✓ τ_b = {coeffs_tau[0]:.2e} * H + {coeffs_tau[1]:.2e}")
+            print(f"  tau_b = {coeffs_tau[0]:.2e} * H + {coeffs_tau[1]:.2e}")
         if coeffs_udef is not None:
-            print(f"  ✓ u_def = {coeffs_udef[0]:.2e} * H^4 + {coeffs_udef[1]:.2e}")
+            print(f"  u_def = {coeffs_udef[0]:.2e} * H^4 + {coeffs_udef[1]:.2e}")
 
-
-    # 5. Appliquer aux observations continues
-    print("\n→ Interpolation temporelle...")
-    
+    # 5. Apply the relationships to all observation dates
     if 'thickness' in df_obs.columns:
-
-        # Vérifier la plage d'extrapolation
-        print(f"  thickness fit range: {df_merged_dem['thickness'].min():.1f} - {df_merged_dem['thickness'].max():.1f}")
-        print(f"  thickness obs range: {df_obs['thickness'].min():.1f} - {df_obs['thickness'].max():.1f}")
 
         if glacier_name == "GB":
             df_slope = df_merged_dem[['date', 'slope']].drop_duplicates('date')
             df_obs['slope'] = np.interp(df_obs['date'].values, df_slope['date'].values, df_slope['slope'].values)
 
             df_obs['obs_tau_b'] = apply_empirical_relation(
-                (df_obs['thickness'].values) * (df_obs['slope']), coeffs_tau
-            )
-            
-            df_obs['obs_u_def'] = apply_empirical_relation(
-                (df_obs['thickness'].values)** 4 *(df_obs['slope'].values)**3, coeffs_udef
+                (df_obs['thickness'].values) * (np.arctan(df_obs['slope'])), coeffs_tau
             )
 
-            df_obs = df_obs.drop(columns=['slope'])  # ← évite slope_x/slope_y plus tard
-        
+            df_obs['obs_u_def'] = apply_empirical_relation(
+                (df_obs['thickness'].values) ** 4 * (np.arctan(df_obs['slope'].values)) ** 3, coeffs_udef
+            )
+
+            df_obs = df_obs.drop(columns=['slope'])  # avoid duplicate slope columns when merging
+
         elif glacier_name == "StSo":
-            # Interpolation linéaire des tau_b Elmer sur les dates d'observation
+            # Saint-Sorlin: linear interpolation in time of the Elmer/Ice outputs
             df_obs['obs_tau_b'] = np.interp(
-                df_obs['date'].values, 
-                df_merged_dem['date'].values, 
+                df_obs['date'].values,
+                df_merged_dem['date'].values,
                 df_merged_dem['tau_b_elmer'].values
             )
 
             df_obs['obs_u_def'] = np.interp(
-                df_obs['date'].values, 
-                df_merged_dem['date'].values, 
+                df_obs['date'].values,
+                df_merged_dem['date'].values,
                 df_merged_dem['u_def_elmer'].values
             )
 
+            # Thickness-based estimates, kept for comparison
             df_obs['obs_tau_b_reglin'] = apply_empirical_relation(
                 df_obs['thickness'].values, coeffs_tau
             )
-            
+
             df_obs['obs_u_def_reglin'] = apply_empirical_relation(
                 df_obs['thickness'].values ** 4, coeffs_udef
             )
@@ -540,28 +512,17 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
             df_obs['obs_tau_b'] = apply_empirical_relation(
                 df_obs['thickness'].values, coeffs_tau
             )
-            
+
             df_obs['obs_u_def'] = apply_empirical_relation(
                 df_obs['thickness'].values ** 4, coeffs_udef
             )
-            
-        # Calculer u_bed
+
+        # Basal sliding velocity
         if 'velocity' in df_obs.columns:
             df_obs['obs_u_bed'] = df_obs['velocity'] - df_obs['obs_u_def']
-    
-    # 6. Fusionner tout
-    print("\n→ Création dataset final...")
-    # df_final = pd.merge(
-    #     df_merged_dem,
-    #     df_obs,
-    #     on='date',
-    #     how='outer'
-    # )
 
-    # 6. Fusionner tout
-    print("\n→ Création dataset final...")
-
-    # D'abord merger les colonnes obs calculées (obs_tau_b etc) via asof
+    # 6. Build the final dataset
+    # Add the reconstructed variables at DEM dates
     cols_calculated = [c for c in ['obs_tau_b', 'obs_u_def', 'obs_u_bed'] if c in df_obs.columns]
 
     for col in cols_calculated:
@@ -577,7 +538,7 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
         df_merged_dem[col] = df_merged_dem[col].fillna(df_merged_dem[f'{col}_fill'])
         df_merged_dem.drop(columns=f'{col}_fill', inplace=True)
 
-    # Ensuite merger outer pour les dates obs-only
+    # Add observation-only dates
     df_final = pd.merge(
         df_merged_dem,
         df_obs,
@@ -593,8 +554,8 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
         df_final.drop(columns=col, inplace=True)
 
     df_final = df_final.sort_values('date').reset_index(drop=True)
-    
-    # 7. Sauvegarder
+
+    # 7. Save
     output_dir = Path(script_dir / '..' / 'data' / 'processed_timeseries' / f'mw{1/m:.3f}')
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -602,63 +563,38 @@ def process_glacier_stake(glacier_name, stake_name, config, m, C, Arg_simu=None,
         output_file = output_dir / f'{glacier_name}_all_data_{stake_name}.csv'
     df_final.to_csv(output_file, index=False)
 
-    print(f"\n✓ Sauvegardé: {output_file}")
-    print(f"  {len(df_final)} lignes au total")
-    print(f"  Colonnes: {list(df_final.columns)}")
-    
+    print(f"  Saved {output_file} ({len(df_final)} rows)")
+
     return df_final
 
 
 def process_all_glaciers(m_index):
     """
-    Traite tous les glaciers.
-    
+    Process all stakes of all glaciers.
+
     Parameters
     ----------
     m_index : int
-        0 pour m=1, 1 pour m=3, 2 pour m=6
-    output_dir : str or Path
-        Répertoire de sortie
+        Index of the (m, C) pair used in Elmer/Ice: 0 for m=1, 1 for m=3, 2 for m=6.
     """
-    print("\n" + "="*80)
-    print(f"TRAITEMENT SÉRIES TEMPORELLES - m_index={m_index}")
-    print("="*80)
-    
+    print(f"\nProcessing all glaciers (m_index={m_index})")
+
     for glacier_name, config in GLACIERS.items():
         m, C = config['mval_Cval'][m_index]
         for stake_name in config['xy_coords'].keys():
             try:
-                process_glacier_stake(
-                    glacier_name, stake_name, config, m, C
-                )
+                process_glacier_stake(glacier_name, stake_name, config, m, C)
             except Exception as e:
-                print(f"\n✗ Erreur {glacier_name} - {stake_name}: {e}")
+                print(f"\n[ERROR] {glacier_name} - {stake_name}: {e}")
                 import traceback
                 traceback.print_exc()
                 continue
-    
-    print("\n" + "="*80)
-    print("TRAITEMENT TERMINÉ")
-    print("="*80)
 
 
 # ============================================================================
-# EXÉCUTION
+# EXECUTION
 # ============================================================================
 
 if __name__ == '__main__':
-    ## Toutes les stakes
-    # for m_index in range(3):
-    #     process_all_glaciers(m_index)
-
-    ## Juste une stake
     for m_index in range(3):
-        glacier_name="StSo"
-        config = GLACIERS[glacier_name]
-        m, C = config['mval_Cval'][m_index]
-
-        stake_name="B"
-        process_glacier_stake(glacier_name, stake_name, config, m, C)
-
-        stake_name="C"
-        process_glacier_stake(glacier_name, stake_name, config, m, C)
+        process_all_glaciers(m_index)

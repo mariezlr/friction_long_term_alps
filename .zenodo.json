@@ -1,0 +1,49 @@
+{
+  "upload_type": "software",
+  "title": "Code and processed data for: Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers",
+  "version": "1.0.0",
+  "description": "Code and processed data to reproduce the analyses and figures of Zeller et al. (YYYY). The repository contains the processed timeseries of basal shear stress and sliding velocity at each study site, the friction law fits, the sensitivity experiments at Argentière Glacier, and the scripts used to produce them.",
+  "creators": [
+    {
+      "name": "Zeller, Marie",
+      "affiliation": "IGE, Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, Grenoble, France",
+      "orcid": "0009-0001-1101-0672"
+    },
+    {
+      "name": "Gilbert, Adrien",
+      "affiliation": "IGE, Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, Grenoble, France",
+      "orcid": "0000-0001-9009-5143"
+    },
+    {
+      "name": "Gimbert, Florent",
+      "affiliation": "IGE, Univ. Grenoble Alpes, CNRS, IRD, Grenoble INP, Grenoble, France",
+      "orcid": "0000-0001-7350-3563"
+    }
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "keywords": [
+    "glaciology",
+    "basal friction",
+    "glacier sliding",
+    "Elmer/Ice",
+    "Alpine glaciers"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/mariezlr/friction_long_term_alps",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.XXXX/XXXXX",
+      "relation": "isSupplementTo",
+      "scheme": "doi"
+    }
+  ],
+  "grants": [
+    {
+      "id": "10.13039/501100000781::101126009"
+    }
+  ]
+}

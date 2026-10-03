@@ -1,54 +1,73 @@
 # friction_long_term_alps
 
-Code and processed data to reproduce the analyses and figures of the study "Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers" (M. Zeller, A. Gilbert, F. Gimbert).
+Code and processed data to reproduce the analyses and figures of:
 
-WARNING: Data and code are still being organized; final version will be released upon acceptance.
+> Zeller, M., Gilbert, A., and Gimbert, F.: Constraining the glacier basal friction law from multidecadal- to century-scale observations of surface velocity and thickness changes on Alpine glaciers, *under reviw in JGR*, doi:10.XXXX/XXXXX, YYYY.
 
-
-## Raw data availability
-
-The raw observational datasets are publicly accessible from their respective repositories:
-
-The Elmer/Ice finite-element software used in this study is open source and available at https://github.com/ElmerCSC/elmerfem ([Gagliardini et al., 2013](https://doi.org/10.5194/gmd-6-1299-2013)). 
-
-Bedrock and surface DEMs, velocity and elevation datasets for the Alpine glaciers analyzed in this study are available from the following sources: 
-- GLAMOS database (https://www.glamos.ch); 
-- Swiss glaciers monitoring programs ([Bauder, 2016](https://doi.glamos.ch/pubs/glrep/glrep_133-134.html); [Bauder et al., 2022](https://doi.glamos.ch/pubs/glrep/glrep_141-142.html) for the thickness change and surface velocity timeseries; [Bauder et al., 2007](https://doi.org/10.3189/172756407782871701) for the surface DEMs; [Grab et al., 2021](http://dx.doi.org/10.1017/jog.2021.55) for the bedrock DEMs); 
-- GLACIOCLIM database (https://glacioclim.osug.fr);
-- French glaciers monitoring programs (Saint-Sorlin: [Vincent et al., 2000](https://doi.org/10.3189/172756500781833052); Argentière: [Vincent et al., 2009](https://doi.org/10.3189/172756409787769500))
-
-
-## Project structure
+## Contents
 
 ```
-friction_long_term_alps/
-├── data/
-│   ├── elmer_raw/               # Elmer/Ice outputs per stake (subdirs mw1, mw3, mw6)
-│   ├── obs_raw/                 # Raw observational data (velocity, altitude, thickness)
-│   ├── processed_timeseries/    # Final timeseries and friction reconstructions per stake
-│   │   └── mw{value}/
-│   │       └── friction_fits/
-│   ├── structural/
-│   │   ├── outlines/            # Glacier outlines
-│   │   ├── bedrocks/            # Bedrock DEMs
-│   │   ├── flowlines/           # Flowline coordinates
-│   │   ├── slopes/              # Pre-computed slope CSVs (output of slope_calculation.py)
-│   │   └── surfaces/            # Surface DEMs per glacier and year (.dat files)
-│   └── uncertainties/           # Elmer outputs for uncertainty ensemble (varying A, C)
-├── src/
-│   ├── utils.py                 # GLACIERS dict: all metadata, coordinates, parameters
-│   ├── slope_calculation.py     # DEM-based slope computation per stake
-│   ├── process_timeseries.py    # Main pipeline: calibration + friction reconstruction
-│   ├── process_uncertainties.py # Same pipeline over uncertainty ensemble
-│   ├── friction_laws.py         # Friction laws, stress calculations, empirical fits
-│   ├── run_friction_fits.py     # Entry point: runs fits over all glaciers/stakes
-│   └── plots/                   # Scripts reproducing all manuscript figures
-└── figures/                     # Output figures
+data/
+  obs_raw/                  In-situ observations (surface elevation and velocity) at each stake
+  structural/               Glacier geometry: outlines, flowlines, bedrock DEMs, slopes
+  processed_timeseries/     Processed timeseries and friction law fits
+  elmer_raw/mw{1,3,6}/      Elmer/Ice outputs at DEM dates, for m = 1, 3 and 6 (m = 3 only on GitHub; all on Zenodo)
+  uncertainties/            Elmer/Ice outputs of the sensitivity experiments at Argentière Profile 4 (Zenodo only)
+src/
+  utils.py                  Glacier and stake configuration (GLACIERS), paths and helper functions
+  friction_laws.py          Friction laws and fitting functions
+  slope_calculation.py      Mean surface slope at each stake
+  generate_As_variable.py   Spatially variable As fields for the sensitivity experiments
+  process_timeseries.py     Basal shear stress and sliding velocity timeseries
+  process_uncertainties.py  Same, for the sensitivity experiments
+  run_friction_fits.py      Friction law fits
+  plots/                    Figures of the manuscript and supplementary material
+figures/                    Figures (Fig_*.pdf)
 ```
 
-**Glaciers:** Allalin (All), Argentière (Arg), Saint-Sorlin (StSo), Glacier Blanc (GB), Gébroulaz (Geb), Giétro (Gie), Corbassière (Cor), Mer de Glace (MDG)
+The GitHub repository contains the code and the processed data. The Elmer/Ice outputs (`data/elmer_raw/`, `data/uncertainties/`) and the surface DEMs (`data/structural/surfaces/`) are too large for GitHub and are only available in the Zenodo archive (doi:10.5281/zenodo.XXXXXXX).
 
+Processed outputs are stored in `processed_timeseries/mw{1/m}/`, where m is the exponent of the friction law used in Elmer/Ice (`mw1.000`, `mw0.333` and `mw0.167` for m = 1, 3 and 6).
 
-## Figures
+## Raw data sources
 
-All manuscript figures can be reproduced from `src/plots/`. Output is saved to `figures/`.
+The Elmer/Ice finite-element software is open source and available at https://github.com/ElmerCSC/elmerfem (Gagliardini et al., 2013).
+
+Observations used in this study come from:
+- Swiss glaciers: GLAMOS (https://www.glamos.ch); Bauder (2016) and Bauder et al. (2022) for thickness change and surface velocity; Bauder et al. (2007) for surface DEMs; Grab et al. (2021) for bedrock DEMs.
+- French glaciers: GLACIOCLIM (https://glacioclim.osug.fr); Vincent et al. (2000) for Saint-Sorlin and Vincent et al. (2009) for Argentière.
+
+## Installation
+
+With conda:
+```
+conda env create -f environment.yml
+conda activate friction_alps
+```
+
+Or with pip:
+```
+pip install -r requirements.txt
+```
+
+## Reproducing the results
+
+The Elmer/Ice simulations are not rerun; their outputs are provided in the Zenodo archive. The mean slopes (`data/structural/slopes/`) and the spatially variable As fields used in the simulations are also provided. From the repository root:
+
+```
+python src/process_timeseries.py
+python src/process_uncertainties.py
+python src/run_friction_fits.py
+python src/plots/main_plots.py
+```
+
+1. `process_timeseries.py` builds the basal shear stress and sliding velocity timeseries at each stake, for m = 1, 3 and 6.
+2. `process_uncertainties.py` does the same for the sensitivity experiments at Argentière Profile 4.
+3. `run_friction_fits.py` fits the friction law at each stake.
+4. `main_plots.py` produces the main figures. The friction law fits of the sensitivity experiments are computed at the first call and saved in `processed_timeseries/uncertainty_fits/`. The other scripts in `src/plots/` produce the supplementary figures.
+
+The GitHub repository includes the Elmer/Ice outputs for m = 3 only; the outputs for m = 1 and m = 6 are available in the Zenodo archive.
+
+## Funding
+
+This work was funded by the ERC project REASSESS led by Florent Gimbert (grant agreement 101126009).

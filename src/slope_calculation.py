@@ -7,7 +7,7 @@ from shapely.geometry import Point, Polygon
 
 script_dir = Path(__file__).resolve().parent
 
-### ----- Compute mean slope for each stake (adapt path_to_DEM_files) -----
+# ----- Compute mean slope for each stake -----
 
 def nan_uniform_filter(data, size):
     """
